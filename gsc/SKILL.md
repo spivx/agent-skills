@@ -248,26 +248,40 @@ Flag queries significantly above (learn from them) or below (needs optimization)
 
 ## RTL Text Handling (Hebrew, Arabic, etc.)
 
-Query strings from the GSC API may contain Right-to-Left text (Hebrew, Arabic, Farsi, etc.). Terminal markdown tables break bidirectional rendering, causing RTL text to appear reversed/inverted.
+Query strings from the GSC API may contain Right-to-Left text (Hebrew, Arabic, Farsi, etc.). Terminals cannot correctly render RTL text when it is mixed with LTR text (numbers, Latin characters) on the same line — the character order gets reversed/inverted. Markdown tables make this even worse.
 
-**Detection:** A string is RTL if it contains characters in these Unicode ranges: `[\u0590-\u05FF]` (Hebrew), `[\u0600-\u06FF]` (Arabic), `[\u0750-\u077F]` (Arabic Supplement), `[\uFB50-\uFDFF\uFE70-\uFEFF]` (Arabic Presentation Forms).
+**When the site's queries contain RTL characters (Hebrew, Arabic, Farsi, etc.), you MUST follow these formatting rules:**
 
-**When presenting results that contain RTL query strings, you MUST:**
-1. **Never use markdown tables** for query/page listings. Tables corrupt RTL character order in terminals.
-2. **Use numbered lists instead.** Present each query as a numbered list item with the metrics inline.
-3. Wrap each RTL string with a Unicode Right-to-Left Embedding character (`U+202B`, `‫`) before and a Pop Directional Formatting character (`U+202C`, `‬`) after. Example: `‫בקשה לקיצור שלילת רישיון‬`
+1. **Never use markdown tables.** Tables completely break RTL rendering in terminals.
+2. **Never mix RTL text and LTR metrics on the same line.** This is the root cause of inverted text. The terminal bidi algorithm fails when both directions share a line.
+3. **Put each RTL query on its own line, with metrics on a separate indented line below it.** This ensures each line is purely one direction.
 
-**Example format for RTL queries:**
+**Required format — each query gets two lines:**
 
 ```
-### Non-Brand Queries (Zero Clicks)
+1. מתכון עוגת שוקולד
+   4 impressions | position 81.5 | Low priority
 
-1. **‫בקשה לקיצור שלילת רישיון‬** — 4 impressions, position 81.5 (Low priority)
-2. **‫גובה קנס על בניה ללא היתר‬** — 2 impressions, position 51 (Low priority)
-3. **‫בניה ללא היתר‬** — 1 impression, position 42 (Medium priority — high-volume keyword)
+2. איך לנקות מזגן
+   2 impressions | position 51 | Low priority
+
+3. טיפים לגידול עגבניות
+   1 impression | position 42 | Medium priority (high-volume keyword)
+
+4. كيفية تنظيف الغسالة
+   3 impressions | position 63 | Low priority
+
+5. أفضل وصفات الطبخ المنزلي
+   5 impressions | position 38 | Medium priority (high-volume keyword)
 ```
 
-If the site has a **mix of LTR and RTL queries**, separate them into two groups. Use tables for LTR queries and numbered lists with RTL markers for RTL queries.
+**Rules:**
+- Line 1: The number, a period, a space, then ONLY the RTL query text. No bold markers, no dashes, no metrics — nothing else.
+- Line 2: Indented with 3 spaces, then metrics in LTR (impressions, CTR, position, priority) separated by ` | `.
+- Blank line between entries for readability.
+- Apply the same two-line format to brand queries, non-brand queries, and page URLs from RTL sites.
+
+If the site has a **mix of LTR and RTL queries**, separate them into two groups. Use standard tables for LTR queries and the two-line format above for RTL queries.
 
 ## Important Notes
 
