@@ -1,11 +1,12 @@
 ---
 name: gsc
 description: >-
-  Fetch and analyze Google Search Console data. Use when the user asks about
-  GSC, Google Search Console, SEO performance, search performance, impressions,
-  clicks, CTR, average position, keywords, rankings, organic traffic, top pages,
-  top queries, "how is my site performing in Google", "check rankings",
-  "what keywords am I ranking for", or "search console report".
+  Live Google Search Console analytics — fetches real SEO data (clicks,
+  impressions, CTR, rankings) and delivers actionable insights with CTR
+  benchmarking and opportunity detection. Zero dependencies. Use when the user
+  asks about GSC, Google Search Console, SEO performance, search performance,
+  keywords, rankings, organic traffic, top pages, top queries, "how is my site
+  performing in Google", "check rankings", or "search console report".
 metadata:
   version: "1.0.0"
   argument-hint: "[7d|28d|3m|6m|12m] [query|page|summary|all]"
@@ -222,34 +223,9 @@ After creating both files, inform the user:
 
 ## Analysis Framework
 
-After fetching data, provide insights using this structure. Do not simply restate the numbers — interpret them, compare against benchmarks, and surface what matters.
+Interpret the data — don't just restate numbers. Compare against benchmarks and surface what matters.
 
-### 1. Executive Summary
-
-Present key metrics clearly:
-- Total clicks, impressions, average CTR (as percentage), average position
-- **Health assessment**: Is the CTR reasonable for the position range? Compare to the benchmarks below.
-- **Context**: What these numbers mean for a site at this stage — growing, stable, or declining.
-
-### 2. Top Queries Analysis
-
-Categorize queries by actionability:
-- **High-impression, low-click queries**: Getting seen but not clicked. Ranking too low or title/description needs improvement. These are your top optimization candidates.
-- **Position 4-10 (bottom of page 1)**: Small ranking improvements here yield disproportionate traffic gains. Highest priority targets.
-- **Position 11-20 (page 2)**: Worth targeting for a page-1 push with content improvements.
-- **Position 20+**: Low priority unless impression volume is high.
-- **Brand vs non-brand**: Separate queries containing the brand/company name from generic search terms.
-
-### 3. Top Pages Analysis
-
-- **Best performers**: High clicks, good CTR relative to position. Identify what makes them work.
-- **Underperforming pages**: High impressions but low CTR — candidates for title and meta description rewrites.
-- **Poorly ranking pages**: High position number (low ranking) despite having a dedicated page. Need content improvement.
-- **Content gaps**: Important topics or services with no page appearing in results.
-
-### 4. CTR Benchmarks
-
-Compare actual CTR against these organic search benchmarks:
+### CTR Benchmarks
 
 | Position | Expected CTR |
 |----------|-------------|
@@ -260,22 +236,15 @@ Compare actual CTR against these organic search benchmarks:
 | 6-10 | 2-5% |
 | 11+ | <2% |
 
-Flag queries or pages significantly **above** these ranges (strong title/snippet — learn from them) or **below** (needs optimization).
+Flag queries significantly above (learn from them) or below (needs optimization) these ranges.
 
-### 5. Actionable Recommendations
+### Analysis Structure
 
-Prioritize by effort vs impact:
-1. **Quick wins**: Title and meta description rewrites for high-impression, low-CTR queries. Minimal effort, immediate potential.
-2. **Content improvements**: Pages ranking 5-15 that could move up with better, more comprehensive content.
-3. **New content opportunities**: Queries appearing in results where no dedicated page exists.
-4. **Technical issues**: Anomalies like zero clicks despite many impressions at good positions.
-
-### 6. Period Comparison
-
-If the user asks for trends or comparisons, run the script twice with different `--range` values and compare:
-- Clicks and impressions change (absolute and percentage)
-- Position movement per query
-- New queries appearing vs queries that dropped off
+1. **Executive Summary** — Total clicks, impressions, avg CTR (as %), avg position. Assess health against the CTR benchmarks above. Note whether the site is growing, stable, or declining.
+2. **Top Queries** — Categorize by actionability: high-impression/low-click (optimization candidates), position 4-10 (highest priority — small gains = big traffic), position 11-20 (page-1 push candidates), 20+ (low priority unless high volume). Separate brand vs non-brand.
+3. **Top Pages** — Best performers (why they work), underperformers (high impressions, low CTR — rewrite titles/descriptions), poorly ranking despite dedicated pages (content improvement needed), content gaps (important topics with no page in results).
+4. **Recommendations** — Prioritize by effort vs impact: quick wins (title/meta rewrites), content improvements (pages ranking 5-15), new content opportunities (queries with no dedicated page), technical anomalies (zero clicks at good positions).
+5. **Period Comparison** (on request) — Run the script twice with different `--range` values. Compare clicks/impressions change, position movement per query, new vs dropped queries.
 
 ## Important Notes
 
