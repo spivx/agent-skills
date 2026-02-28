@@ -66,7 +66,7 @@ Create a file called `.gsc-config.json` **in the root of your repository** — t
 
 ```json
 {
-  "siteUrl": "sc-domain:yourdomain.com",
+  "siteUrl": "https://yourdomain.com/",
   "client_id": "YOUR_CLIENT_ID.apps.googleusercontent.com",
   "client_secret": "YOUR_CLIENT_SECRET",
   "refresh_token": "YOUR_REFRESH_TOKEN",
@@ -146,7 +146,7 @@ The script outputs JSON to stdout:
 ```json
 {
   "metadata": {
-    "siteUrl": "sc-domain:yourdomain.com",
+    "siteUrl": "https://yourdomain.com/",
     "dateRange": { "startDate": "2025-01-01", "endDate": "2025-01-28" },
     "range": "28d",
     "fetchedAt": "2025-01-31T12:00:00.000Z"
@@ -192,7 +192,7 @@ Create `.gsc-config.json` in the user's project root with this template:
 
 ```json
 {
-  "siteUrl": "sc-domain:yourdomain.com",
+  "siteUrl": "https://yourdomain.com/",
   "client_id": "YOUR_CLIENT_ID.apps.googleusercontent.com",
   "client_secret": "YOUR_CLIENT_SECRET",
   "refresh_token": "YOUR_REFRESH_TOKEN",
@@ -206,12 +206,15 @@ Create `.gsc-config.json` in the user's project root with this template:
 ### 2. Add to .gitignore
 
 Check if `.gitignore` exists in the project root:
-- If it exists, append `.gsc-config.json` to it (unless already present)
+- If it exists, append `.gsc-config.json` and `gsc-report.html` to it (unless already present)
 - If it doesn't exist, create `.gitignore` with:
 
 ```
 # GSC credentials - contains OAuth secrets
 .gsc-config.json
+
+# GSC generated report
+gsc-report.html
 ```
 
 ### 3. Guide the User
@@ -259,13 +262,14 @@ Check every string in `topQueries[].keys[]` and `topPages[].keys[]`. If ANY stri
 ### HTML report flow
 
 1. **Write the full analysis to `gsc-report.html` in the project root.** Use the HTML structure below. This file contains the complete analysis — executive summary, queries, pages, and recommendations — with proper RTL rendering.
-2. **Auto-open the report in the browser.** After writing the HTML file, run the platform-appropriate open command:
+2. **Add `gsc-report.html` to `.gitignore`** (unless already present). This is a generated file and should not be committed.
+3. **Auto-open the report in the browser.** After writing the HTML file, run the platform-appropriate open command:
    - **macOS** (`darwin`): `open gsc-report.html`
    - **Linux**: `xdg-open gsc-report.html`
    - **Windows**: `start gsc-report.html`
    Detect the platform from the system environment and use the correct command. This opens the report instantly in the user's default browser — no manual navigation needed.
-3. **In the terminal, print only a short summary** (total clicks, impressions, avg CTR, avg position) followed by: `Full report written to gsc-report.html — opened in your default browser.`
-4. **Do NOT attempt to render RTL query text in the terminal.** Not in tables, not in lists, not on standalone lines. The terminal summary should only contain LTR text (numbers, English labels).
+4. **In the terminal, print only a short summary** (total clicks, impressions, avg CTR, avg position) followed by: `Full report written to gsc-report.html — opened in your default browser.`
+5. **Do NOT attempt to render RTL query text in the terminal.** Not in tables, not in lists, not on standalone lines. The terminal summary should only contain LTR text (numbers, English labels).
 
 ### HTML structure
 
