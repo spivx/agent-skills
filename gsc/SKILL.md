@@ -246,6 +246,29 @@ Flag queries significantly above (learn from them) or below (needs optimization)
 4. **Recommendations** — Prioritize by effort vs impact: quick wins (title/meta rewrites), content improvements (pages ranking 5-15), new content opportunities (queries with no dedicated page), technical anomalies (zero clicks at good positions).
 5. **Period Comparison** (on request) — Run the script twice with different `--range` values. Compare clicks/impressions change, position movement per query, new vs dropped queries.
 
+## RTL Text Handling (Hebrew, Arabic, etc.)
+
+Query strings from the GSC API may contain Right-to-Left text (Hebrew, Arabic, Farsi, etc.). Terminal markdown tables break bidirectional rendering, causing RTL text to appear reversed/inverted.
+
+**Detection:** A string is RTL if it contains characters in these Unicode ranges: `[\u0590-\u05FF]` (Hebrew), `[\u0600-\u06FF]` (Arabic), `[\u0750-\u077F]` (Arabic Supplement), `[\uFB50-\uFDFF\uFE70-\uFEFF]` (Arabic Presentation Forms).
+
+**When presenting results that contain RTL query strings, you MUST:**
+1. **Never use markdown tables** for query/page listings. Tables corrupt RTL character order in terminals.
+2. **Use numbered lists instead.** Present each query as a numbered list item with the metrics inline.
+3. Wrap each RTL string with a Unicode Right-to-Left Embedding character (`U+202B`, `‫`) before and a Pop Directional Formatting character (`U+202C`, `‬`) after. Example: `‫בקשה לקיצור שלילת רישיון‬`
+
+**Example format for RTL queries:**
+
+```
+### Non-Brand Queries (Zero Clicks)
+
+1. **‫בקשה לקיצור שלילת רישיון‬** — 4 impressions, position 81.5 (Low priority)
+2. **‫גובה קנס על בניה ללא היתר‬** — 2 impressions, position 51 (Low priority)
+3. **‫בניה ללא היתר‬** — 1 impression, position 42 (Medium priority — high-volume keyword)
+```
+
+If the site has a **mix of LTR and RTL queries**, separate them into two groups. Use tables for LTR queries and numbered lists with RTL markers for RTL queries.
+
 ## Important Notes
 
 - CTR and position values are **averages** across the entire period, not point-in-time snapshots.
