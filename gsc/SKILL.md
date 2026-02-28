@@ -248,42 +248,65 @@ Flag queries significantly above (learn from them) or below (needs optimization)
 
 ## RTL Text Handling (Hebrew, Arabic, etc.)
 
-Query strings from the GSC API may contain Right-to-Left text (Hebrew, Arabic, Farsi, etc.). Most terminal emulators do not correctly implement the Unicode Bidirectional Algorithm — RTL text appears reversed/inverted even on a standalone line. Markdown tables and numbered list prefixes make this worse.
+Terminals cannot render Right-to-Left text (Hebrew, Arabic, Farsi, etc.) correctly — characters appear reversed/inverted, and no combination of Unicode control characters or formatting tricks can reliably fix this through an LLM's text output.
 
-**When the site's queries contain RTL characters (Hebrew, Arabic, Farsi, etc.), you MUST follow ALL of these rules:**
+**When any query or page URL in the JSON data contains RTL characters (Hebrew `\u0590-\u05FF`, Arabic `\u0600-\u06FF`, etc.), you MUST write the full analysis to an HTML file instead of rendering it in the terminal.**
 
-1. **Never use markdown tables.** Tables completely break RTL rendering in terminals.
-2. **Never put ANY LTR content on an RTL line.** This includes numbered prefixes like "1. ", bullet points, bold markers (`**`), dashes, or metrics. Even a single LTR character on an RTL line can invert the entire text.
-3. **Prefix every RTL line with the Unicode Right-to-Left Mark character (U+200F, `‏`).** This invisible character must appear as the very first character of the line, immediately before the RTL text. It tells the terminal's bidi algorithm to render the line right-to-left. You MUST output the actual U+200F character, not an escape sequence.
-4. **Put metrics on a separate indented line below the query.**
+### How to detect RTL
 
-**Required format — each query gets two lines:**
+Check every string in `topQueries[].keys[]` and `topPages[].keys[]`. If ANY string contains characters in the Hebrew, Arabic, or Farsi Unicode ranges, the site has RTL content and you must use the HTML report flow.
 
+### HTML report flow
+
+1. **Write the full analysis to `gsc-report.html` in the project root.** Use the HTML structure below. This file contains the complete analysis — executive summary, queries, pages, and recommendations — with proper RTL rendering.
+2. **In the terminal, print only a short summary** (total clicks, impressions, avg CTR, avg position) followed by: `Full report written to gsc-report.html — open in a browser for correctly rendered Hebrew/Arabic text.`
+3. **Do NOT attempt to render RTL query text in the terminal.** Not in tables, not in lists, not on standalone lines. The terminal summary should only contain LTR text (numbers, English labels).
+
+### HTML structure
+
+```html
+<!DOCTYPE html>
+<html lang="he">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GSC Report — SITE_NAME</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 860px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; line-height: 1.6; }
+    h1 { font-size: 1.5rem; border-bottom: 2px solid #e5e7eb; padding-bottom: 0.5rem; }
+    h2 { font-size: 1.2rem; margin-top: 2rem; color: #374151; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+    th, td { padding: 0.5rem 0.75rem; border: 1px solid #e5e7eb; text-align: left; }
+    th { background: #f9fafb; font-weight: 600; }
+    .rtl { direction: rtl; text-align: right; unicode-bidi: bidi-override; }
+    .metric { font-variant-numeric: tabular-nums; }
+    .priority-high { color: #059669; font-weight: 600; }
+    .priority-medium { color: #d97706; }
+    .priority-low { color: #6b7280; }
+    .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin: 1rem 0; }
+    .summary-card { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 1rem; text-align: center; }
+    .summary-card .value { font-size: 1.5rem; font-weight: 700; }
+    .summary-card .label { font-size: 0.85rem; color: #6b7280; }
+    .note { background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 0.75rem 1rem; margin: 1rem 0; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <!-- CONTENT GOES HERE -->
+</body>
+</html>
 ```
-‏בקשה לקיצור שלילת רישיון
-   4 impressions | position 81.5 | Low priority
 
-‏גובה קנס על בניה ללא היתר
-   2 impressions | position 51 | Low priority
+**Key rules for the HTML content:**
+- Set `<html lang="he">` for Hebrew sites, `lang="ar"` for Arabic sites.
+- Apply the `rtl` class to every `<td>` or element that contains RTL query text.
+- Use standard `<table>` elements — tables render perfectly in browsers with proper `dir`/`class` attributes.
+- Metrics cells (clicks, impressions, CTR, position) stay LTR — do NOT add the `rtl` class to them.
+- Include the analysis commentary (priority labels, benchmark comparisons, recommendations) as normal LTR paragraphs.
+- The `<title>` should include the site domain and date range.
 
-‏בניה ללא היתר
-   1 impression | position 42 | High-value keyword
+### Mixed LTR + RTL sites
 
-‏كيفية تنظيف الغسالة
-   3 impressions | position 63 | Low priority
-
-‏أفضل وصفات الطبخ المنزلي
-   5 impressions | position 38 | Medium priority
-```
-
-**Rules:**
-- RTL line: Starts with U+200F (RLM), then ONLY the RTL query text. No numbers, no bold markers, no dashes, no metrics — nothing else on this line.
-- Metrics line: Indented with 3 spaces, then metrics in LTR (impressions, CTR, position, priority) separated by ` | `.
-- Blank line between entries for readability.
-- Apply the same two-line format to brand queries, non-brand queries, and page URLs from RTL sites.
-- If you need to number entries, put the number on the metrics line (e.g., `   #1 | 4 impressions | position 81.5 | Low priority`).
-
-If the site has a **mix of LTR and RTL queries**, separate them into two groups. Use standard tables for LTR queries and the two-line format above for RTL queries.
+If the site has both LTR and RTL queries, still write the HTML report (for the RTL queries). In the terminal summary, you may include LTR queries in standard markdown tables as usual — only RTL text is banned from terminal output.
 
 ## Important Notes
 
