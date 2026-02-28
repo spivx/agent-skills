@@ -173,13 +173,52 @@ If the script outputs an error JSON, diagnose and guide the user. The error resp
 
 | Error Code | Meaning | Resolution |
 |------------|---------|------------|
-| `CONFIG_NOT_FOUND` | `.gsc-config.json` doesn't exist | Guide the user through Setup (above). The file must be in the repository root. |
+| `CONFIG_NOT_FOUND` | `.gsc-config.json` doesn't exist | Automatically create the config file using the template below, then guide the user through Setup to fill in real values. |
 | `CONFIG_INCOMPLETE` | One or more required fields are missing | The error lists each missing field with a hint. Tell the user exactly which fields to add and where to get the values (refer to the relevant Setup step). |
 | `TOKEN_REFRESH_FAILED` (401/403) | OAuth credentials are invalid or the refresh token has expired | Ask the user to regenerate the refresh token (Step 3). If using Testing mode, tokens expire after 7 days — suggest publishing to Production. |
 | `GSC_API_ERROR` (403) | The Google account doesn't have access to this Search Console property | Verify the account used in Step 3 is the same one that owns/has access to the property in GSC. |
 | `GSC_API_ERROR` (400) | `siteUrl` format is wrong | Try `sc-domain:domain.com` for Domain properties or `https://domain.com/` (with trailing slash) for URL-prefix properties. |
 
 The script also prints a **warning to stderr** if `.gsc-config.json` is not listed in the project's `.gitignore`. If you see this warning, immediately add `.gsc-config.json` to the user's `.gitignore` file to prevent credentials from being committed.
+
+## Automated First-Run Setup
+
+When this skill is triggered and `.gsc-config.json` does not exist (or `CONFIG_NOT_FOUND` error is returned), **automatically perform these steps**:
+
+### 1. Create the Config File
+
+Create `.gsc-config.json` in the user's project root with this template:
+
+```json
+{
+  "siteUrl": "sc-domain:yourdomain.com",
+  "client_id": "YOUR_CLIENT_ID.apps.googleusercontent.com",
+  "client_secret": "YOUR_CLIENT_SECRET",
+  "refresh_token": "YOUR_REFRESH_TOKEN",
+  "defaults": {
+    "range": "28d",
+    "limit": 25
+  }
+}
+```
+
+### 2. Add to .gitignore
+
+Check if `.gitignore` exists in the project root:
+- If it exists, append `.gsc-config.json` to it (unless already present)
+- If it doesn't exist, create `.gitignore` with:
+
+```
+# GSC credentials - contains OAuth secrets
+.gsc-config.json
+```
+
+### 3. Guide the User
+
+After creating both files, inform the user:
+1. The config file has been created with placeholder values
+2. Walk them through the Setup section above to obtain their OAuth credentials
+3. Remind them to replace the placeholder values before running the skill
 
 ## Analysis Framework
 
