@@ -249,19 +249,13 @@ Flag queries significantly above (learn from them) or below (needs optimization)
 4. **Recommendations** — Prioritize by effort vs impact: quick wins (title/meta rewrites), content improvements (pages ranking 5-15), new content opportunities (queries with no dedicated page), technical anomalies (zero clicks at good positions).
 5. **Period Comparison** (on request) — Run the script twice with different `--range` values. Compare clicks/impressions change, position movement per query, new vs dropped queries.
 
-## RTL Text Handling (Hebrew, Arabic, etc.)
+## HTML Report Output
 
-Terminals cannot render Right-to-Left text (Hebrew, Arabic, Farsi, etc.) correctly — characters appear reversed/inverted, and no combination of Unicode control characters or formatting tricks can reliably fix this through an LLM's text output.
+**Always generate an HTML report for every analysis.** The HTML report provides a polished, readable format with proper styling, tables, and typography that terminals cannot match.
 
-**When any query or page URL in the JSON data contains RTL characters (Hebrew `\u0590-\u05FF`, Arabic `\u0600-\u06FF`, etc.), you MUST write the full analysis to an HTML file instead of rendering it in the terminal.**
+### Report flow
 
-### How to detect RTL
-
-Check every string in `topQueries[].keys[]` and `topPages[].keys[]`. If ANY string contains characters in the Hebrew, Arabic, or Farsi Unicode ranges, the site has RTL content and you must use the HTML report flow.
-
-### HTML report flow
-
-1. **Write the full analysis to `gsc-report.html` in the project root.** Use the HTML structure below. This file contains the complete analysis — executive summary, queries, pages, and recommendations — with proper RTL rendering.
+1. **Write the full analysis to `gsc-report.html` in the project root.** Use the HTML structure below. This file contains the complete analysis — executive summary, queries, pages, and recommendations.
 2. **Add `gsc-report.html` to `.gitignore`** (unless already present). This is a generated file and should not be committed.
 3. **Auto-open the report in the browser.** After writing the HTML file, run the platform-appropriate open command:
    - **macOS** (`darwin`): `open gsc-report.html`
@@ -269,13 +263,16 @@ Check every string in `topQueries[].keys[]` and `topPages[].keys[]`. If ANY stri
    - **Windows**: `start gsc-report.html`
    Detect the platform from the system environment and use the correct command. This opens the report instantly in the user's default browser — no manual navigation needed.
 4. **In the terminal, print only a short summary** (total clicks, impressions, avg CTR, avg position) followed by: `Full report written to gsc-report.html — opened in your default browser.`
-5. **Do NOT attempt to render RTL query text in the terminal.** Not in tables, not in lists, not on standalone lines. The terminal summary should only contain LTR text (numbers, English labels).
+
+### RTL Text Handling (Hebrew, Arabic, etc.)
+
+Terminals cannot render Right-to-Left text (Hebrew, Arabic, Farsi, etc.) correctly. Since the HTML report is always generated, RTL text is always rendered properly in the browser. When the data contains RTL characters (Hebrew `\u0590-\u05FF`, Arabic `\u0600-\u06FF`, etc.), do NOT attempt to render RTL query text in the terminal summary — keep the terminal summary to LTR text only (numbers, English labels).
 
 ### HTML structure
 
 ```html
 <!DOCTYPE html>
-<html lang="he">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -306,16 +303,12 @@ Check every string in `topQueries[].keys[]` and `topPages[].keys[]`. If ANY stri
 ```
 
 **Key rules for the HTML content:**
-- Set `<html lang="he">` for Hebrew sites, `lang="ar"` for Arabic sites.
+- Set `<html lang="en">` by default. For Hebrew sites use `lang="he"`, for Arabic sites use `lang="ar"`.
 - Apply the `rtl` class to every `<td>` or element that contains RTL query text.
 - Use standard `<table>` elements — tables render perfectly in browsers with proper `dir`/`class` attributes.
 - Metrics cells (clicks, impressions, CTR, position) stay LTR — do NOT add the `rtl` class to them.
 - Include the analysis commentary (priority labels, benchmark comparisons, recommendations) as normal LTR paragraphs.
 - The `<title>` should include the site domain and date range.
-
-### Mixed LTR + RTL sites
-
-If the site has both LTR and RTL queries, still write the HTML report (for the RTL queries). In the terminal summary, you may include LTR queries in standard markdown tables as usual — only RTL text is banned from terminal output.
 
 ## Important Notes
 
