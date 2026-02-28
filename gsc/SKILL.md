@@ -248,38 +248,40 @@ Flag queries significantly above (learn from them) or below (needs optimization)
 
 ## RTL Text Handling (Hebrew, Arabic, etc.)
 
-Query strings from the GSC API may contain Right-to-Left text (Hebrew, Arabic, Farsi, etc.). Terminals cannot correctly render RTL text when it is mixed with LTR text (numbers, Latin characters) on the same line — the character order gets reversed/inverted. Markdown tables make this even worse.
+Query strings from the GSC API may contain Right-to-Left text (Hebrew, Arabic, Farsi, etc.). Most terminal emulators do not correctly implement the Unicode Bidirectional Algorithm — RTL text appears reversed/inverted even on a standalone line. Markdown tables and numbered list prefixes make this worse.
 
-**When the site's queries contain RTL characters (Hebrew, Arabic, Farsi, etc.), you MUST follow these formatting rules:**
+**When the site's queries contain RTL characters (Hebrew, Arabic, Farsi, etc.), you MUST follow ALL of these rules:**
 
 1. **Never use markdown tables.** Tables completely break RTL rendering in terminals.
-2. **Never mix RTL text and LTR metrics on the same line.** This is the root cause of inverted text. The terminal bidi algorithm fails when both directions share a line.
-3. **Put each RTL query on its own line, with metrics on a separate indented line below it.** This ensures each line is purely one direction.
+2. **Never put ANY LTR content on an RTL line.** This includes numbered prefixes like "1. ", bullet points, bold markers (`**`), dashes, or metrics. Even a single LTR character on an RTL line can invert the entire text.
+3. **Prefix every RTL line with the Unicode Right-to-Left Mark character (U+200F, `‏`).** This invisible character must appear as the very first character of the line, immediately before the RTL text. It tells the terminal's bidi algorithm to render the line right-to-left. You MUST output the actual U+200F character, not an escape sequence.
+4. **Put metrics on a separate indented line below the query.**
 
 **Required format — each query gets two lines:**
 
 ```
-1. מתכון עוגת שוקולד
+‏בקשה לקיצור שלילת רישיון
    4 impressions | position 81.5 | Low priority
 
-2. איך לנקות מזגן
+‏גובה קנס על בניה ללא היתר
    2 impressions | position 51 | Low priority
 
-3. טיפים לגידול עגבניות
-   1 impression | position 42 | Medium priority (high-volume keyword)
+‏בניה ללא היתר
+   1 impression | position 42 | High-value keyword
 
-4. كيفية تنظيف الغسالة
+‏كيفية تنظيف الغسالة
    3 impressions | position 63 | Low priority
 
-5. أفضل وصفات الطبخ المنزلي
-   5 impressions | position 38 | Medium priority (high-volume keyword)
+‏أفضل وصفات الطبخ المنزلي
+   5 impressions | position 38 | Medium priority
 ```
 
 **Rules:**
-- Line 1: The number, a period, a space, then ONLY the RTL query text. No bold markers, no dashes, no metrics — nothing else.
-- Line 2: Indented with 3 spaces, then metrics in LTR (impressions, CTR, position, priority) separated by ` | `.
+- RTL line: Starts with U+200F (RLM), then ONLY the RTL query text. No numbers, no bold markers, no dashes, no metrics — nothing else on this line.
+- Metrics line: Indented with 3 spaces, then metrics in LTR (impressions, CTR, position, priority) separated by ` | `.
 - Blank line between entries for readability.
 - Apply the same two-line format to brand queries, non-brand queries, and page URLs from RTL sites.
+- If you need to number entries, put the number on the metrics line (e.g., `   #1 | 4 impressions | position 81.5 | Low priority`).
 
 If the site has a **mix of LTR and RTL queries**, separate them into two groups. Use standard tables for LTR queries and the two-line format above for RTL queries.
 
