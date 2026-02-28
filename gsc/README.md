@@ -18,6 +18,7 @@ npx skills add spivx/agent-skills --skill gsc
 - Page-2 rankings one push away from page 1
 - Actionable recommendations prioritized by effort vs impact
 - Period-over-period trend analysis on request
+- RTL-aware — Hebrew/Arabic sites get a formatted HTML report that auto-opens in your browser
 
 ## Setup
 

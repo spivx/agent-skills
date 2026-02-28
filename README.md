@@ -21,6 +21,7 @@ Connects directly to the Google Search Console API to fetch live search performa
 - Opportunity detection — high-impression/low-CTR keywords, page-2 ranking targets
 - Actionable recommendations prioritized by effort vs impact
 - Period-over-period trend analysis
+- RTL-aware — Hebrew/Arabic sites get a formatted HTML report that auto-opens in your browser
 
 ## Installation
 
