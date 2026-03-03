@@ -35,7 +35,7 @@ When you run this skill, the AI fetches your live GSC data and delivers:
 
 ## Setup
 
-This skill requires a one-time setup to connect to Google Search Console. If the config file is missing or incomplete, guide the user through these steps.
+This skill requires a one-time setup to connect to Google Search Console. If credentials are missing, guide the user through these steps.
 
 ### Step 1: Create a Google Cloud Project
 
@@ -60,45 +60,47 @@ This skill requires a one-time setup to connect to Google Search Console. If the
 6. In Step 2, click **Exchange authorization code for tokens**
 7. Copy the **Refresh Token** from the response
 
-### Step 4: Create the Config File
+### Step 4: Set Environment Variables
 
-Create a file called `.gsc-config.json` **in the root of your repository** — the same directory where your `.git` folder or `package.json` lives. This file must be at the top level of your project, not inside any subdirectory.
+Credentials are provided exclusively via environment variables — they are never stored in files. Set these three required variables:
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `GSC_CLIENT_ID` | Yes | OAuth2 Client ID from Step 2 |
+| `GSC_CLIENT_SECRET` | Yes | OAuth2 Client Secret from Step 2 |
+| `GSC_REFRESH_TOKEN` | Yes | Refresh token from Step 3 |
+| `GSC_SITE_URL` | No | Your GSC property URL (`sc-domain:yourdomain.com` or `https://yourdomain.com/`). Can also be set in `.gsc-config.json` or via `--siteUrl` CLI arg. |
+
+Add them to your shell profile (e.g. `~/.zshrc`, `~/.bashrc`) or a project-level `.env` file loaded by your tooling:
+
+```bash
+export GSC_CLIENT_ID="YOUR_CLIENT_ID.apps.googleusercontent.com"
+export GSC_CLIENT_SECRET="YOUR_CLIENT_SECRET"
+export GSC_REFRESH_TOKEN="YOUR_REFRESH_TOKEN"
+export GSC_SITE_URL="https://yourdomain.com/"
+```
+
+### Step 5: Optional Config File (non-sensitive settings only)
+
+You can optionally create `.gsc-config.json` in the project root to set `siteUrl` and default options. **This file must never contain credentials** (`client_id`, `client_secret`, `refresh_token`) — those come from env vars only.
 
 ```json
 {
   "siteUrl": "https://yourdomain.com/",
-  "client_id": "YOUR_CLIENT_ID.apps.googleusercontent.com",
-  "client_secret": "YOUR_CLIENT_SECRET",
-  "refresh_token": "YOUR_REFRESH_TOKEN",
   "defaults": {
-    "range": "28d",
+    "range": "7d",
     "limit": 25
   }
 }
 ```
 
-**Config fields:**
+| Field | Description |
+|-------|-------------|
+| `siteUrl` | Your GSC property. Use `sc-domain:yourdomain.com` for Domain properties or `https://yourdomain.com/` for URL-prefix properties. Overridden by `GSC_SITE_URL` env var or `--siteUrl` CLI arg. |
+| `defaults.range` | Default time range when no argument is passed. Options: `7d`, `28d`, `3m`, `6m`, `12m`. Default: `28d` |
+| `defaults.limit` | Default max rows per dimension. Default: `25` |
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `siteUrl` | Yes | Your GSC property. Use `sc-domain:yourdomain.com` for Domain properties or `https://yourdomain.com/` for URL-prefix properties. |
-| `client_id` | Yes | OAuth2 Client ID from Step 2 |
-| `client_secret` | Yes | OAuth2 Client Secret from Step 2 |
-| `refresh_token` | Yes | Refresh token from Step 3 |
-| `defaults.range` | No | Default time range when no argument is passed. Options: `7d`, `28d`, `3m`, `6m`, `12m`. Default: `28d` |
-| `defaults.limit` | No | Default max rows per dimension. Default: `25` |
-
-### Step 5: Add to `.gitignore`
-
-This file contains OAuth credentials. **You must add it to `.gitignore` before committing anything.** Open your `.gitignore` (or create one) and add:
-
-```
-.gsc-config.json
-```
-
-The script will warn you if this step is skipped.
-
-**Note:** If your Google Cloud project is in **Testing** mode, refresh tokens expire after 7 days. To avoid this, publish the app to **Production** in the OAuth consent screen. For personal use, no Google verification is needed.
+**Note on OAuth consent screen:** If your Google Cloud project is in **Testing** mode, refresh tokens expire after 7 days. To avoid this, publish the app to **Production** in the OAuth consent screen. "Production" here means the OAuth consent screen is publicly visible (anyone *could* request access), but your Client ID and Client Secret remain private — only people who have them can authenticate. For a personal-use Desktop app, no Google verification is needed and there is no security risk in publishing.
 
 ## How to Fetch Data
 
@@ -174,28 +176,31 @@ If the script outputs an error JSON, diagnose and guide the user. The error resp
 
 | Error Code | Meaning | Resolution |
 |------------|---------|------------|
-| `CONFIG_NOT_FOUND` | `.gsc-config.json` doesn't exist | Automatically create the config file using the template below, then guide the user through Setup to fill in real values. |
-| `CONFIG_INCOMPLETE` | One or more required fields are missing | The error lists each missing field with a hint. Tell the user exactly which fields to add and where to get the values (refer to the relevant Setup step). |
+| `CREDENTIALS_MISSING` | One or more required env vars (`GSC_CLIENT_ID`, `GSC_CLIENT_SECRET`, `GSC_REFRESH_TOKEN`) are not set | Guide the user through Setup Step 4. The error lists exactly which env vars are missing. |
+| `SITE_URL_MISSING` | No site URL found from env var, CLI arg, or config file | Tell the user to set `GSC_SITE_URL` env var, pass `--siteUrl`, or add `siteUrl` to `.gsc-config.json`. |
 | `TOKEN_REFRESH_FAILED` (401/403) | OAuth credentials are invalid or the refresh token has expired | Ask the user to regenerate the refresh token (Step 3). If using Testing mode, tokens expire after 7 days — suggest publishing to Production. |
 | `GSC_API_ERROR` (403) | The Google account doesn't have access to this Search Console property | Verify the account used in Step 3 is the same one that owns/has access to the property in GSC. |
 | `GSC_API_ERROR` (400) | `siteUrl` format is wrong | Try `sc-domain:domain.com` for Domain properties or `https://domain.com/` (with trailing slash) for URL-prefix properties. |
 
-The script also prints a **warning to stderr** if `.gsc-config.json` is not listed in the project's `.gitignore`. If you see this warning, immediately add `.gsc-config.json` to the user's `.gitignore` file to prevent credentials from being committed.
-
 ## Automated First-Run Setup
 
-When this skill is triggered and `.gsc-config.json` does not exist (or `CONFIG_NOT_FOUND` error is returned), **automatically perform these steps**:
+When this skill is triggered and credentials are missing (`CREDENTIALS_MISSING` error), **automatically perform these steps**:
 
-### 1. Create the Config File
+### 1. Show the Required Environment Variables
 
-Create `.gsc-config.json` in the user's project root with this template:
+Tell the user they need to set the missing env vars. Show the export commands they need to add to their shell profile (see Setup Step 4).
+
+### 2. Guide Through OAuth Setup
+
+Walk them through Setup Steps 1-3 to obtain their Client ID, Client Secret, and Refresh Token from Google Cloud Console and OAuth Playground.
+
+### 3. Optionally Create Config File for Defaults
+
+If the user wants to customize default range/limit or set `siteUrl` per-project, create `.gsc-config.json` in the project root:
 
 ```json
 {
   "siteUrl": "https://yourdomain.com/",
-  "client_id": "YOUR_CLIENT_ID.apps.googleusercontent.com",
-  "client_secret": "YOUR_CLIENT_SECRET",
-  "refresh_token": "YOUR_REFRESH_TOKEN",
   "defaults": {
     "range": "28d",
     "limit": 25
@@ -203,26 +208,12 @@ Create `.gsc-config.json` in the user's project root with this template:
 }
 ```
 
-### 2. Add to .gitignore
-
-Check if `.gitignore` exists in the project root:
-- If it exists, append `.gsc-config.json` and `gsc-report.html` to it (unless already present)
-- If it doesn't exist, create `.gitignore` with:
+Add `gsc-report.html` to `.gitignore` (unless already present) since it's a generated file:
 
 ```
-# GSC credentials - contains OAuth secrets
-.gsc-config.json
-
 # GSC generated report
 gsc-report.html
 ```
-
-### 3. Guide the User
-
-After creating both files, inform the user:
-1. The config file has been created with placeholder values
-2. Walk them through the Setup section above to obtain their OAuth credentials
-3. Remind them to replace the placeholder values before running the skill
 
 ## Analysis Framework
 

@@ -14,9 +14,14 @@ function getArg(name, defaultVal) {
 const type = getArg("type", "all");
 const siteUrlOverride = getArg("siteUrl", null);
 
-// --- Load config ---
-function loadConfig() {
-  // Walk up from cwd to find .gsc-config.json
+// --- Credentials from environment variables (required) ---
+const client_id = process.env.GSC_CLIENT_ID;
+const client_secret = process.env.GSC_CLIENT_SECRET;
+const refresh_token = process.env.GSC_REFRESH_TOKEN;
+const envSiteUrl = process.env.GSC_SITE_URL;
+
+// --- Optional config file for siteUrl and defaults ---
+function loadConfigFile() {
   let dir = process.cwd();
   while (true) {
     try {
@@ -32,59 +37,37 @@ function loadConfig() {
   return null;
 }
 
-const config = loadConfig();
+const fileConfig = loadConfigFile();
 
-if (!config) {
-  console.log(JSON.stringify({ error: "CONFIG_NOT_FOUND", message: ".gsc-config.json not found in project root or any parent directory." }));
-  process.exit(1);
-}
+// --- Validate required credentials ---
+const missingEnvVars = [
+  !client_id && "GSC_CLIENT_ID",
+  !client_secret && "GSC_CLIENT_SECRET",
+  !refresh_token && "GSC_REFRESH_TOKEN",
+].filter(Boolean);
 
-// --- Validate required fields individually ---
-const requiredFields = [
-  { key: "siteUrl", label: "siteUrl", hint: "The GSC property URL. Use sc-domain:yourdomain.com for Domain properties or https://yourdomain.com/ for URL-prefix properties." },
-  { key: "client_id", label: "client_id", hint: "OAuth2 Client ID from Google Cloud Console (APIs & Services > Credentials)." },
-  { key: "client_secret", label: "client_secret", hint: "OAuth2 Client Secret from Google Cloud Console (APIs & Services > Credentials)." },
-  { key: "refresh_token", label: "refresh_token", hint: "Refresh token obtained via https://developers.google.com/oauthplayground/ using the Search Console API v3 scope." },
-];
-
-const missingFields = requiredFields.filter((f) => !siteUrlOverride || f.key !== "siteUrl").filter((f) => !config[f.key]);
-
-if (missingFields.length > 0) {
-  const details = missingFields.map((f) => `  - ${f.label}: ${f.hint}`).join("\n");
+if (missingEnvVars.length > 0) {
   console.log(JSON.stringify({
-    error: "CONFIG_INCOMPLETE",
-    message: `Missing required field(s) in .gsc-config.json:\n${details}`,
-    missingFields: missingFields.map((f) => f.key),
+    error: "CREDENTIALS_MISSING",
+    message: `Missing required environment variable(s): ${missingEnvVars.join(", ")}. Set them in your shell profile or .env file.`,
+    missingEnvVars,
   }));
   process.exit(1);
 }
 
-const { client_id, client_secret, refresh_token } = config;
-const siteUrl = siteUrlOverride || config.siteUrl;
+// siteUrl: env var > CLI arg > config file
+const siteUrl = siteUrlOverride || envSiteUrl || (fileConfig && fileConfig.siteUrl);
 
-// --- Check .gitignore ---
-function checkGitignore() {
-  let dir = process.cwd();
-  while (true) {
-    try {
-      const gitignorePath = resolve(dir, ".gitignore");
-      const content = readFileSync(gitignorePath, "utf-8");
-      if (!content.includes(".gsc-config.json")) {
-        console.error("WARNING: .gsc-config.json is not in your .gitignore. This file contains credentials and should never be committed. Add .gsc-config.json to your .gitignore file.");
-      }
-      return;
-    } catch {
-      const parent = resolve(dir, "..");
-      if (parent === dir) return; // no .gitignore found, skip check
-      dir = parent;
-    }
-  }
+if (!siteUrl) {
+  console.log(JSON.stringify({
+    error: "SITE_URL_MISSING",
+    message: "No site URL found. Set GSC_SITE_URL env var, pass --siteUrl, or add siteUrl to .gsc-config.json. Use sc-domain:yourdomain.com for Domain properties or https://yourdomain.com/ for URL-prefix properties.",
+  }));
+  process.exit(1);
 }
 
-checkGitignore();
-
 // --- Apply config defaults, CLI args override ---
-const configDefaults = config.defaults || {};
+const configDefaults = (fileConfig && fileConfig.defaults) || {};
 const range = getArg("range", configDefaults.range || "28d");
 const limit = parseInt(getArg("limit", String(configDefaults.limit || 25)), 10);
 
@@ -221,13 +204,22 @@ async function querySummary(accessToken) {
   };
 }
 
+// --- Sanitize errors (strip credential values) ---
+function sanitizeError(message) {
+  let sanitized = message;
+  if (client_secret) sanitized = sanitized.replaceAll(client_secret, "[REDACTED]");
+  if (refresh_token) sanitized = sanitized.replaceAll(refresh_token, "[REDACTED]");
+  if (client_id) sanitized = sanitized.replaceAll(client_id, "[REDACTED]");
+  return sanitized;
+}
+
 // --- Main ---
 async function main() {
   let accessToken;
   try {
     accessToken = await refreshAccessToken();
   } catch (err) {
-    console.log(JSON.stringify({ error: "TOKEN_REFRESH_FAILED", message: err.message }));
+    console.log(JSON.stringify({ error: "TOKEN_REFRESH_FAILED", message: sanitizeError(err.message) }));
     process.exit(1);
   }
 
@@ -253,7 +245,7 @@ async function main() {
       result.topPages = await queryGSC(accessToken, "page", limit);
     }
   } catch (err) {
-    console.log(JSON.stringify({ error: "GSC_API_ERROR", message: err.message }));
+    console.log(JSON.stringify({ error: "GSC_API_ERROR", message: sanitizeError(err.message) }));
     process.exit(1);
   }
 
