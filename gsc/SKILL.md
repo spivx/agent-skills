@@ -62,7 +62,7 @@ This skill requires a one-time setup to connect to Google Search Console. If cre
 
 ### Step 4: Set Environment Variables
 
-Credentials are provided exclusively via environment variables — they are never stored in files. Set these three required variables:
+**Security:** Credentials are provided exclusively via environment variables — they are **never stored in files, config files, or script arguments**. The script reads them from `process.env` at runtime only. Set these three required variables:
 
 | Variable | Required | Description |
 |----------|----------|-------------|
@@ -82,7 +82,7 @@ export GSC_SITE_URL="https://yourdomain.com/"
 
 ### Step 5: Optional Config File (non-sensitive settings only)
 
-You can optionally create `.gsc-config.json` in the project root to set `siteUrl` and default options. **This file must never contain credentials** (`client_id`, `client_secret`, `refresh_token`) — those come from env vars only.
+You can optionally create `.gsc-config.json` in the project root to set `siteUrl` and default options. **This file must never contain credentials** (`client_id`, `client_secret`, `refresh_token`) — those come from env vars only. The script ignores any credential fields in this file.
 
 ```json
 {
@@ -182,9 +182,9 @@ If the script outputs an error JSON, diagnose and guide the user. The error resp
 | `GSC_API_ERROR` (403) | The Google account doesn't have access to this Search Console property | Verify the account used in Step 3 is the same one that owns/has access to the property in GSC. |
 | `GSC_API_ERROR` (400) | `siteUrl` format is wrong | Try `sc-domain:domain.com` for Domain properties or `https://domain.com/` (with trailing slash) for URL-prefix properties. |
 
-## Automated First-Run Setup
+## First-Run Setup Guidance
 
-When this skill is triggered and credentials are missing (`CREDENTIALS_MISSING` error), **automatically perform these steps**:
+When this skill is triggered and credentials are missing (`CREDENTIALS_MISSING` error), guide the user — **do not create or modify any files without explicit user confirmation**.
 
 ### 1. Show the Required Environment Variables
 
@@ -194,9 +194,9 @@ Tell the user they need to set the missing env vars. Show the export commands th
 
 Walk them through Setup Steps 1-3 to obtain their Client ID, Client Secret, and Refresh Token from Google Cloud Console and OAuth Playground.
 
-### 3. Optionally Create Config File for Defaults
+### 3. Ask Before Creating Any Files
 
-If the user wants to customize default range/limit or set `siteUrl` per-project, create `.gsc-config.json` in the project root:
+**Ask the user for confirmation before creating or modifying any file.** If they want to customize default range/limit or set `siteUrl` per-project, offer to create `.gsc-config.json` in the project root — but only after they approve:
 
 ```json
 {
@@ -208,7 +208,7 @@ If the user wants to customize default range/limit or set `siteUrl` per-project,
 }
 ```
 
-Add `gsc-report.html` to `.gitignore` (unless already present) since it's a generated file:
+Similarly, offer to add `gsc-report.html` to `.gitignore` — but ask first:
 
 ```
 # GSC generated report
