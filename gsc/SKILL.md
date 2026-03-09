@@ -257,7 +257,7 @@ Flag queries significantly above (learn from them) or below (needs optimization)
 
 ### RTL Text Handling (Hebrew, Arabic, etc.)
 
-Terminals cannot render Right-to-Left text (Hebrew, Arabic, Farsi, etc.) correctly. Since the HTML report is always generated, RTL text is always rendered properly in the browser. When the data contains RTL characters (Hebrew `\u0590-\u05FF`, Arabic `\u0600-\u06FF`, etc.), do NOT attempt to render RTL query text in the terminal summary — keep the terminal summary to LTR text only (numbers, English labels).
+Terminals cannot render Right-to-Left text (Hebrew, Arabic, Farsi, etc.) correctly. Since the HTML report is always generated, RTL text is always rendered properly in the browser. When the data contains RTL characters (Hebrew, Arabic, Farsi, etc.), do NOT attempt to render RTL query text in the terminal summary — keep the terminal summary to LTR text only (numbers, English labels).
 
 ### HTML structure
 
