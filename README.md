@@ -23,6 +23,25 @@ Connects directly to the Google Search Console API to fetch live search performa
 - Period-over-period trend analysis
 - RTL-aware — Hebrew/Arabic sites get a formatted HTML report that auto-opens in your browser
 
+### GSC Submit — Google Indexing API
+
+Submits URLs to Google for crawling via the Indexing API. Supports three input modes: direct URLs, file imports (txt, CSV, sitemap.xml), and automatic route detection from your codebase.
+
+**Use when:**
+- "Submit these pages to Google for indexing"
+- "Tell Google to crawl my new pages"
+- "Scan my project routes and submit them to Google"
+- "Check which URLs Google already knows about"
+- "Notify Google that I removed a page"
+
+**What you get:**
+- Instant Google notification — no waiting for the next crawl cycle
+- Pre-submission status check — see which URLs were already submitted
+- Automatic route scanning — detects Next.js, React Router, Express, Astro, and more
+- Smart route classification — excludes API routes, auth pages, and admin dashboards by default
+- Terminal summary + HTML report with per-URL success/failure details
+- Reuses existing GSC OAuth credentials — just add the Indexing API scope
+
 ## Installation
 
 Install all skills:
@@ -35,15 +54,22 @@ Install a specific skill:
 
 ```bash
 npx skills add spivx/agent-skills --skill gsc
+npx skills add spivx/agent-skills --skill gsc-submit
 ```
 
 ## Usage
 
 Skills activate automatically when your prompt matches their trigger conditions. Just ask naturally:
 
+**GSC (Search Console):**
 - "How is my site doing in Google search?"
 - "Show me my top keywords for the last 3 months"
 - "What pages are underperforming in organic search?"
+
+**GSC Submit (Indexing API):**
+- "Submit my new blog posts to Google for indexing"
+- "Scan my routes and submit them to Google"
+- "Check which URLs Google already knows about"
 
 ## Skill Structure
 
