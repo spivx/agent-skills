@@ -15,9 +15,12 @@
  */
 
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync } from "fs";
-import { resolve, join } from "path";
+import { resolve, join, dirname } from "path";
+import { execSync } from "child_process";
+import { fileURLToPath } from "url";
 
 const DATA_DIR = resolve(process.cwd(), ".gsc-data");
+const args = process.argv.slice(2);
 
 function ensureDir() {
   if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
@@ -162,6 +165,116 @@ function buildComparison(oldDate, newDate) {
   };
 }
 
+// --- Watchlist helpers ---
+
+function loadWatchlist() {
+  const configPaths = [
+    resolve(process.cwd(), ".gsc-config.json"),
+    resolve(process.cwd(), "gsc-config.json"),
+  ];
+  for (const cp of configPaths) {
+    if (existsSync(cp)) {
+      try {
+        const cfg = JSON.parse(readFileSync(cp, "utf-8"));
+        if (Array.isArray(cfg.watchlist) && cfg.watchlist.length > 0) {
+          return cfg.watchlist.map((q) => q.toLowerCase());
+        }
+      } catch { /* ignore parse errors */ }
+    }
+  }
+  return null;
+}
+
+// --- Trends helpers ---
+
+function buildQueryHistory(dates, filterQuery, watchlist) {
+  const queryMap = new Map(); // query -> [{date, position, clicks, impressions, ctr}]
+
+  for (const date of dates) {
+    const snap = readSnapshot(date);
+    if (!snap || !snap.topQueries) continue;
+    for (const q of snap.topQueries) {
+      const query = q.keys[0];
+      if (filterQuery && query.toLowerCase() !== filterQuery.toLowerCase()) continue;
+      if (!filterQuery && watchlist && !watchlist.includes(query.toLowerCase())) continue;
+
+      if (!queryMap.has(query)) queryMap.set(query, []);
+      queryMap.get(query).push({
+        date,
+        position: q.position,
+        clicks: q.clicks,
+        impressions: q.impressions,
+        ctr: q.ctr,
+      });
+    }
+  }
+
+  return queryMap;
+}
+
+function detectAlerts(queryMap) {
+  const alerts = [];
+  for (const [query, history] of queryMap) {
+    if (history.length < 2) continue;
+    const latest = history[history.length - 1];
+    const prev = history[history.length - 2];
+    const posDelta = Math.round((prev.position - latest.position) * 10) / 10;
+
+    // Dropped off page 1 (was <=10, now >10)
+    if (prev.position <= 10 && latest.position > 10) {
+      alerts.push({ query, type: "dropped_page1", from: prev.position, to: latest.position, date: latest.date });
+    }
+    // Entered page 1 (was >10, now <=10)
+    else if (prev.position > 10 && latest.position <= 10) {
+      alerts.push({ query, type: "entered_page1", from: prev.position, to: latest.position, date: latest.date });
+    }
+    // Big position jump (5+ positions in either direction)
+    else if (Math.abs(posDelta) >= 5) {
+      alerts.push({
+        query,
+        type: posDelta > 0 ? "big_improvement" : "big_decline",
+        from: prev.position,
+        to: latest.position,
+        delta: posDelta,
+        date: latest.date,
+      });
+    }
+  }
+  return alerts;
+}
+
+function buildTrendsOutput(queryMap, alerts, filterQuery, watchlist) {
+  const trends = [];
+  for (const [query, history] of queryMap) {
+    const first = history[0];
+    const latest = history[history.length - 1];
+    const overallDelta = history.length >= 2
+      ? Math.round((first.position - latest.position) * 10) / 10
+      : 0;
+    trends.push({
+      query,
+      dataPoints: history.length,
+      firstSeen: first.date,
+      lastSeen: latest.date,
+      currentPosition: latest.position,
+      currentClicks: latest.clicks,
+      currentImpressions: latest.impressions,
+      overallPositionDelta: overallDelta,
+      history,
+    });
+  }
+
+  // Sort by current clicks descending
+  trends.sort((a, b) => b.currentClicks - a.currentClicks);
+
+  return {
+    totalQueries: trends.length,
+    filter: filterQuery || (watchlist ? "watchlist" : "all (top queries from each snapshot)"),
+    alerts,
+    trends,
+  };
+}
+
 // --- Commands ---
 
 const command = process.argv[2];
@@ -279,16 +392,111 @@ if (command === "store") {
   result.note = `Comparing ${weekAgoDate} to ${newest} (${Math.round((newestDate - new Date(weekAgoDate)) / (1000 * 60 * 60 * 24))} days apart)`;
   console.log(JSON.stringify(result, null, 2));
 
+} else if (command === "fetch") {
+  // Convenience command: fetches queries from GSC with a high limit and stores the snapshot.
+  // Single command for rank tracking — no manual watchlist needed.
+  const scriptDir = dirname(fileURLToPath(import.meta.url));
+  const fetchScript = join(scriptDir, "gsc-fetch.mjs");
+
+  // Read trackLimit from config, default 500
+  const cfg = (() => {
+    try { return JSON.parse(readFileSync(resolve(process.cwd(), ".gsc-config.json"), "utf-8")); }
+    catch { return {}; }
+  })();
+  const trackLimit = cfg.trackLimit || 500;
+
+  // Pass through any extra CLI args (e.g. --range 7d)
+  const extraArgs = args.slice(1).join(" ");
+
+  try {
+    const fetchOutput = execSync(
+      `node "${fetchScript}" --type all --limit ${trackLimit} ${extraArgs}`,
+      { encoding: "utf-8", maxBuffer: 50 * 1024 * 1024 }
+    );
+
+    // Check if fetch returned an error
+    let fetchData;
+    try {
+      fetchData = JSON.parse(fetchOutput);
+    } catch {
+      console.log(JSON.stringify({ error: "FETCH_PARSE_ERROR", message: "Could not parse fetch output as JSON" }));
+      process.exit(1);
+    }
+
+    if (fetchData.error) {
+      console.log(JSON.stringify(fetchData));
+      process.exit(1);
+    }
+
+    // Store the snapshot
+    const date = todayStr();
+    writeSnapshot(date, fetchData);
+
+    const dates = listDates();
+    const result = {
+      stored: date,
+      totalSnapshots: dates.length,
+      queriesFetched: (fetchData.topQueries || []).length,
+      pagesFetched: (fetchData.topPages || []).length,
+    };
+
+    // Auto-compare with previous snapshot
+    if (dates.length >= 2) {
+      const prevDate = dates[dates.length - 2];
+      result.previousDate = prevDate;
+      result.dayComparison = buildComparison(prevDate, date);
+    }
+
+    // Check for alerts via trends
+    const watchlist = loadWatchlist();
+    const queryMap = buildQueryHistory(dates, null, watchlist);
+    const alerts = detectAlerts(queryMap);
+    if (alerts.length > 0) result.alerts = alerts;
+
+    console.log(JSON.stringify(result, null, 2));
+  } catch (err) {
+    console.log(JSON.stringify({ error: "FETCH_FAILED", message: err.message }));
+    process.exit(1);
+  }
+
+} else if (command === "trends") {
+  const dates = listDates();
+  if (dates.length === 0) {
+    console.log(JSON.stringify({ error: "NO_DATA", message: "No snapshots found. Run 'store' first." }));
+    process.exit(1);
+  }
+
+  const filterQuery = process.argv[3] || null;
+  const watchlist = filterQuery ? null : loadWatchlist();
+
+  const queryMap = buildQueryHistory(dates, filterQuery, watchlist);
+
+  if (queryMap.size === 0) {
+    const msg = filterQuery
+      ? `Query "${filterQuery}" not found in any snapshot.`
+      : watchlist
+        ? "No watchlist queries found in snapshots. Check your watchlist in .gsc-config.json."
+        : "No query data found in snapshots.";
+    console.log(JSON.stringify({ error: "NO_MATCHES", message: msg, availableDates: dates }));
+    process.exit(1);
+  }
+
+  const alerts = detectAlerts(queryMap);
+  const result = buildTrendsOutput(queryMap, alerts, filterQuery, watchlist);
+  console.log(JSON.stringify(result, null, 2));
+
 } else {
   console.log(JSON.stringify({
     error: "UNKNOWN_COMMAND",
-    message: "Usage: gsc-history.mjs <store|list|get|compare|weekly>",
+    message: "Usage: gsc-history.mjs <fetch|store|list|get|compare|weekly|trends>",
     commands: {
+      fetch: "Fetches queries from GSC (up to trackLimit, default 500), stores snapshot, and shows alerts",
       store: "Reads GSC JSON from stdin, stores as today's snapshot",
       list: "Lists all available snapshot dates",
       get: "get <YYYY-MM-DD> — prints a stored snapshot",
       compare: "compare [date1] [date2] — compares two snapshots",
       weekly: "Shows weekly comparison if 7+ days of data exist",
+      trends: "trends [query] — per-query rank history over time (uses watchlist if configured)",
     },
   }));
   process.exit(1);

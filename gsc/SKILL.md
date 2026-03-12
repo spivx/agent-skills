@@ -90,7 +90,9 @@ You can optionally create `.gsc-config.json` in the project root to set `siteUrl
   "defaults": {
     "range": "7d",
     "limit": 25
-  }
+  },
+  "trackLimit": 500,
+  "watchlist": ["keyword to highlight", "another keyword"]
 }
 ```
 
@@ -99,6 +101,8 @@ You can optionally create `.gsc-config.json` in the project root to set `siteUrl
 | `siteUrl` | Your GSC property. Use `sc-domain:yourdomain.com` for Domain properties or `https://yourdomain.com/` for URL-prefix properties. Overridden by `GSC_SITE_URL` env var or `--siteUrl` CLI arg. |
 | `defaults.range` | Default time range when no argument is passed. Options: `7d`, `28d`, `3m`, `6m`, `12m`. Default: `28d` |
 | `defaults.limit` | Default max rows per dimension. Default: `25` |
+| `trackLimit` | Max queries to fetch when using the `fetch` command for rank tracking. Default: `500`. GSC API supports up to 25,000. |
+| `watchlist` | Optional array of queries to highlight in the `trends` view. Does not affect data collection — all queries up to `trackLimit` are always fetched and stored. |
 
 **Note on OAuth consent screen:** If your Google Cloud project is in **Testing** mode, refresh tokens expire after 7 days. To avoid this, publish the app to **Production** in the OAuth consent screen. "Production" here means the OAuth consent screen is publicly visible (anyone *could* request access), but your Client ID and Client Secret remain private — only people who have them can authenticate. For a personal-use Desktop app, no Google verification is needed and there is no security risk in publishing.
 
@@ -230,38 +234,56 @@ Every time you fetch GSC data, **always store it as a daily snapshot** so trends
 
 ### How It Works
 
-After fetching data with `gsc-fetch.mjs`, pipe the output into the history script:
+Use the `fetch` command — it fetches all queries from GSC (up to `trackLimit`, default 500), stores the snapshot, compares with previous snapshots, and checks for rank alerts, all in one step:
+
+```bash
+node <skill-path>/scripts/gsc-history.mjs fetch [--range 7d]
+```
+
+This stores today's snapshot in `.gsc-data/` (one JSON file per day). If you already stored a snapshot today, it overwrites the previous one (last write wins).
+
+Alternatively, you can pipe `gsc-fetch.mjs` output into `store` manually (useful for custom fetch options):
 
 ```bash
 node <skill-path>/scripts/gsc-fetch.mjs [options] | node <skill-path>/scripts/gsc-history.mjs store
 ```
 
-This stores today's snapshot in `.gsc-data/` (one JSON file per day). If you already stored a snapshot today, it overwrites the previous one (last write wins).
-
 ### History Commands
 
 | Command | Description |
 |---------|-------------|
+| `fetch [--range 7d]` | **Rank tracking in one command.** Fetches up to `trackLimit` (default 500) queries from GSC, stores as today's snapshot, compares with previous, and checks for rank alerts. Pass extra flags like `--range` to customize. |
 | `store` | Reads GSC JSON from stdin, stores as today's snapshot. Returns comparison with previous snapshot if available. |
 | `list` | Lists all available snapshot dates and count. |
 | `get <YYYY-MM-DD>` | Prints the stored snapshot for a specific date. |
 | `compare [date1] [date2]` | Compares two snapshots. Defaults to the two most recent. |
 | `weekly` | Compares latest snapshot to the one closest to 7 days ago. Requires 7+ days of history. |
+| `trends [query]` | Per-query rank history over time. Pass a query to see one keyword, or omit to see all (filtered by watchlist if configured). |
 
 ### Workflow — Every Report
 
-1. **Fetch** data with `gsc-fetch.mjs` and **pipe** it into `gsc-history.mjs store` in a single command.
-2. The `store` command returns JSON that includes:
-   - Confirmation of storage (date, total snapshots)
-   - **Day comparison** (vs previous snapshot) — automatically included when 2+ snapshots exist
-   - **Weekly comparison** — automatically included when snapshots span 7+ days
-3. **Include comparison data in the HTML report** (not in terminal). When comparison data is returned:
-   - Add a "Trends" section to the HTML report showing summary metric changes (clicks, impressions, CTR, position) with delta and percentage change, using the trend styles below.
-   - Show improved/declined queries and pages (top 10 each by click delta) in HTML tables.
-   - Show new and dropped queries/pages in the HTML report.
-   - When weekly comparison is available, add a separate "Weekly Trends" section in the HTML report.
-   - All comparison tables and trend visualizations go in the HTML file — the terminal only gets a one-line trend summary.
-4. In the terminal summary, append a one-line trend indicator, e.g.: `Trend: clicks +12% vs last snapshot (2026-03-10)`. All detailed comparison data is in the HTML report.
+Every `/gsc` invocation runs the **full pipeline** automatically. No separate commands needed.
+
+1. **Fetch + store + compare + alerts** — run the single `fetch` command:
+   ```bash
+   node <skill-path>/scripts/gsc-history.mjs fetch [--range ...]
+   ```
+   This returns JSON with: the stored snapshot data, day-over-day comparison (if 2+ snapshots), and rank alerts.
+
+2. **Get rank trends** — run `trends` to get per-query position history:
+   ```bash
+   node <skill-path>/scripts/gsc-history.mjs trends
+   ```
+
+3. **Build the HTML report** with everything:
+   - Executive summary, top queries, top pages, recommendations (from the fetch data)
+   - **Day-over-day comparison** — summary metric changes, improved/declined queries and pages (from `fetch` output's `dayComparison`)
+   - **Rank alerts** — prominently displayed if any queries entered/dropped page 1 or moved 5+ positions (from `fetch` output's `alerts`)
+   - **Rank history** — for alerted queries and watchlisted queries, show a position history mini-table with all data points (from `trends` output)
+   - **Weekly trends** — when snapshots span 7+ days, run `weekly` and add a separate section
+   - All comparison tables and trend visualizations go in the HTML file — the terminal only gets a short summary.
+
+4. **Terminal summary** — print only: total clicks, impressions, avg CTR, avg position, one-line trend delta if available, alert count if any, and `Full report written to gsc-report.html`.
 
 ### Comparison Output Format
 
@@ -296,6 +318,64 @@ The `store` command returns JSON like:
 ```
 
 **Note on position delta:** A positive `positionDelta` means the query **improved** (moved up in rankings — e.g., from position 10 to 8 is +2). A negative value means it **declined**.
+
+### Rank Tracking & Trends
+
+The `trends` command reads all stored snapshots and builds a per-query position history over time. This lets you see how any keyword's ranking has evolved across all your snapshots.
+
+#### Watchlist
+
+To focus on specific keywords, add a `watchlist` array to `.gsc-config.json`:
+
+```json
+{
+  "siteUrl": "https://yourdomain.com/",
+  "watchlist": [
+    "your important keyword",
+    "another keyword to track"
+  ]
+}
+```
+
+When a watchlist is configured, `trends` (without a query argument) only shows those keywords. Without a watchlist, it shows all queries found across snapshots.
+
+#### Trends Output Format
+
+```json
+{
+  "totalQueries": 5,
+  "filter": "watchlist",
+  "alerts": [
+    { "query": "keyword", "type": "entered_page1", "from": 12.3, "to": 8.1, "date": "2026-03-12" },
+    { "query": "other keyword", "type": "big_decline", "from": 5.0, "to": 15.2, "delta": -10.2, "date": "2026-03-12" }
+  ],
+  "trends": [
+    {
+      "query": "keyword",
+      "dataPoints": 5,
+      "firstSeen": "2026-03-05",
+      "lastSeen": "2026-03-12",
+      "currentPosition": 8.1,
+      "currentClicks": 45,
+      "currentImpressions": 1200,
+      "overallPositionDelta": 4.2,
+      "history": [
+        { "date": "2026-03-05", "position": 12.3, "clicks": 30, "impressions": 1000, "ctr": 0.03 },
+        { "date": "2026-03-12", "position": 8.1, "clicks": 45, "impressions": 1200, "ctr": 0.0375 }
+      ]
+    }
+  ]
+}
+```
+
+#### Alert Types
+
+| Type | Meaning |
+|------|---------|
+| `entered_page1` | Query moved from position >10 to ≤10 (entered page 1) |
+| `dropped_page1` | Query moved from position ≤10 to >10 (dropped off page 1) |
+| `big_improvement` | Position improved by 5+ spots between last two snapshots |
+| `big_decline` | Position declined by 5+ spots between last two snapshots |
 
 ### HTML Trend Styles
 
@@ -343,10 +423,13 @@ Flag queries significantly above (learn from them) or below (needs optimization)
 
 ### Report flow
 
-1. **Fetch data and store snapshot** in a single piped command: `node <skill-path>/scripts/gsc-fetch.mjs [options] | node <skill-path>/scripts/gsc-history.mjs store`. Save the `store` output — it contains both the stored data and any available comparisons.
-2. **Write the full analysis to `gsc-report.html` in the project root.** Use the HTML structure below. This file contains the complete analysis — executive summary, queries, pages, recommendations, **and trend comparisons** (day-over-day and weekly when available).
-3. **Add `gsc-report.html` and `.gsc-data/` to `.gitignore`** (unless already present). These are generated files and should not be committed.
-4. **In the terminal, print only a short summary** (total clicks, impressions, avg CTR, avg position, trend delta if available) followed by: `Full report written to gsc-report.html` and the absolute path so the user can open it.
+Follow the **Workflow — Every Report** steps above (in the Snapshot History section). In summary:
+
+1. Run `gsc-history.mjs fetch` — this fetches all queries (up to `trackLimit`), stores the snapshot, and returns comparisons + alerts.
+2. Run `gsc-history.mjs trends` — this returns per-query rank history for alerted/watchlisted queries.
+3. **Write the full analysis to `gsc-report.html` in the project root.** Use the HTML structure below. This file contains the complete analysis — executive summary, queries, pages, recommendations, trend comparisons, rank alerts, and rank history.
+4. **Add `gsc-report.html` and `.gsc-data/` to `.gitignore`** (unless already present). These are generated files and should not be committed.
+5. **In the terminal, print only a short summary** (total clicks, impressions, avg CTR, avg position, trend delta if available, alert count) followed by: `Full report written to gsc-report.html` and the absolute path so the user can open it.
 
 ### RTL Text Handling (Hebrew, Arabic, etc.)
 
