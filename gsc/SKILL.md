@@ -290,6 +290,28 @@ Every `/gsc` invocation runs the **full pipeline** automatically. No separate co
    - Ask the user: "Which of these would you like me to implement? (enter numbers, e.g. 1, 3)"
    - Do NOT print any stats, tables, or analysis in the terminal — everything except the numbered action items lives in the HTML report.
 
+### Snapshot Staleness Warning
+
+When displaying comparison data or action items, calculate the number of days between the two compared snapshots (`oldDate` and `newDate` from the comparison output). If the gap is **less than 5 days**, show a staleness warning — both in the HTML report and in the terminal output before the action items list.
+
+**Why:** GSC data has a 2-3 day lag, and ranking/indexing changes from SEO work can take days to weeks to stabilize. If snapshots are too close together, the comparison may not yet reflect any changes you've made, and the action items may be based on outdated pre-change performance.
+
+**HTML report** — render the warning as a `.note` block (the style already exists in the template) at the top of the comparison section:
+
+```html
+<div class="note">
+  ⚠️ <strong>Note:</strong> These snapshots are only N day(s) apart (DATE1 → DATE2). GSC data has a 2–3 day lag and ranking changes can take 5–14 days to appear. The action items below may not yet reflect changes you've recently made.
+</div>
+```
+
+**Terminal output** — print the warning on its own line, before the action items list:
+
+```
+⚠️  Note: Snapshots are only N day(s) apart. Suggestions may not yet reflect recent changes (GSC lag + ranking delay can take 5–14 days).
+```
+
+If no comparison is available (first snapshot), skip the warning entirely.
+
 ### Comparison Output Format
 
 The `store` command returns JSON like:
