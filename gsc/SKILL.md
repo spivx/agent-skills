@@ -283,7 +283,12 @@ Every `/gsc` invocation runs the **full pipeline** automatically. No separate co
    - **Weekly trends** — when snapshots span 7+ days, run `weekly` and add a separate section
    - All comparison tables and trend visualizations go in the HTML file — the terminal only gets a short summary.
 
-4. **Terminal summary** — print only: total clicks, impressions, avg CTR, avg position, one-line trend delta if available, alert count if any, and `Full report written to gsc-report.html`.
+4. **Terminal output** — after writing the HTML report, do the following in order:
+   - Print: `Full report written to gsc-report.html` and the absolute path.
+   - Ask the user: "Would you like me to open the report in your browser?"
+   - Print the action items / recommendations as a **numbered list** (one line each, concise).
+   - Ask the user: "Which of these would you like me to implement? (enter numbers, e.g. 1, 3)"
+   - Do NOT print any stats, tables, or analysis in the terminal — everything except the numbered action items lives in the HTML report.
 
 ### Comparison Output Format
 
@@ -429,7 +434,12 @@ Follow the **Workflow — Every Report** steps above (in the Snapshot History se
 2. Run `gsc-history.mjs trends` — this returns per-query rank history for alerted/watchlisted queries.
 3. **Write the full analysis to `gsc-report.html` in the project root.** Use the HTML structure below. This file contains the complete analysis — executive summary, queries, pages, recommendations, trend comparisons, rank alerts, and rank history.
 4. **Add `gsc-report.html` and `.gsc-data/` to `.gitignore`** (unless already present). These are generated files and should not be committed.
-5. **In the terminal, print only a short summary** (total clicks, impressions, avg CTR, avg position, trend delta if available, alert count) followed by: `Full report written to gsc-report.html` and the absolute path so the user can open it.
+5. **In the terminal, after writing the HTML report:**
+   - Print: `Full report written to gsc-report.html` and the absolute path.
+   - Ask: "Would you like me to open the report in your browser?"
+   - Print a **numbered list of action items** (concise, one per line) derived from the recommendations in the report.
+   - Ask: "Which of these would you like me to implement? (enter numbers, e.g. 1, 3)"
+   - Do **not** print stats, tables, summaries, or analysis in the terminal — all data stays in the HTML report.
 
 ### RTL Text Handling (Hebrew, Arabic, etc.)
 
