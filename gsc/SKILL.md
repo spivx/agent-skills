@@ -487,6 +487,17 @@ Terminals cannot render Right-to-Left text (Hebrew, Arabic, Farsi, etc.) correct
 - Include the analysis commentary (priority labels, benchmark comparisons, recommendations) as normal LTR paragraphs.
 - The `<title>` should include the site domain and date range.
 
+## Implementation Guidelines
+
+When presenting action items to the user and implementing changes:
+
+1. **Language** — Always write action items and suggestions in English, regardless of the site's language.
+2. **Google policy compliance** — Every suggested or implemented change must comply with Google's guidelines:
+   - Must not harm SEO (no thin content, keyword stuffing, hidden text, cloaking, or manipulative link schemes)
+   - Must not produce content that would be flagged by Google's spam or quality algorithms
+   - Must not harm Lighthouse scores (performance, accessibility, best practices, SEO audits)
+   - When in doubt, prefer the conservative option that maintains or improves ranking signals
+
 ## Important Notes
 
 - CTR and position values are **averages** across the entire period, not point-in-time snapshots.
