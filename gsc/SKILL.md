@@ -120,9 +120,9 @@ Replace `<skill-path>` with the installed skill location (e.g., `.claude/skills/
 
 | Option | Values | Default | Description |
 |--------|--------|---------|-------------|
-| `--range` | `7d`, `28d`, `3m`, `6m`, `12m`, or `YYYY-MM-DD,YYYY-MM-DD` | `28d` (or config default) | Time range to query |
+| `--range` | `7d`, `28d`, `3m`, `6m`, `12m`, or `YYYY-MM-DD,YYYY-MM-DD` | from `.gsc-config.json` `defaults.range`, fallback `28d` | Time range to query |
 | `--type` | `query`, `page`, `summary`, `all` | `all` | Which data to fetch |
-| `--limit` | number | `25` (or config default) | Max rows per dimension |
+| `--limit` | number | from `.gsc-config.json` `defaults.limit`, fallback `25` | Max rows per dimension |
 | `--siteUrl` | GSC property URL | from config | Override the site URL |
 
 ### Parsing Arguments from User Input
@@ -130,7 +130,7 @@ Replace `<skill-path>` with the installed skill location (e.g., `.claude/skills/
 When the user triggers this skill with arguments like `/gsc 3m` or `/gsc 7d query`:
 - First argument matching a range pattern (`7d`, `28d`, `3m`, `6m`, `12m`): use as `--range`
 - Second argument matching a type (`query`, `page`, `summary`, `all`): use as `--type`
-- If no arguments provided, use the defaults from config or the built-in defaults (28d, all)
+- If no arguments provided, **omit `--range` and `--type` from the command** — the scripts read defaults from `.gsc-config.json` automatically. Do not pass hardcoded fallback values.
 
 ### Example Commands
 
@@ -206,7 +206,7 @@ Walk them through Setup Steps 1-3 to obtain their Client ID, Client Secret, and 
 {
   "siteUrl": "https://yourdomain.com/",
   "defaults": {
-    "range": "28d",
+    "range": "7d",
     "limit": 25
   }
 }
