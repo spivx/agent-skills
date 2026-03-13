@@ -17,6 +17,35 @@ const action = getArg("action", "URL_UPDATED");
 const checkOnly = args.includes("--check");
 const skipPrevious = args.includes("--force");
 
+// --- Load .env file if present (searches cwd and parent dirs) ---
+function loadDotEnv() {
+  let dir = process.cwd();
+  while (true) {
+    try {
+      const envPath = resolve(dir, ".env");
+      const lines = readFileSync(envPath, "utf-8").split("\n");
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith("#")) continue;
+        const eq = trimmed.indexOf("=");
+        if (eq === -1) continue;
+        const key = trimmed.slice(0, eq).trim();
+        let val = trimmed.slice(eq + 1).trim();
+        if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+          val = val.slice(1, -1);
+        }
+        if (!(key in process.env)) process.env[key] = val;
+      }
+      break;
+    } catch {
+      const parent = resolve(dir, "..");
+      if (parent === dir) break;
+      dir = parent;
+    }
+  }
+}
+loadDotEnv();
+
 // --- Credentials from environment variables (required) ---
 const client_id = process.env.GSC_CLIENT_ID;
 const client_secret = process.env.GSC_CLIENT_SECRET;
