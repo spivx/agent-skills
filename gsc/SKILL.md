@@ -9,7 +9,7 @@ description: >-
   performing in Google", "check rankings", or "search console report".
 metadata:
   version: "1.0.0"
-  argument-hint: "[7d|28d|3m|6m|12m] [query|page|summary|all]"
+  argument-hint: "[7d|28d|3m|6m|12m] [query|page|summary|all] [--output html|telegram]"
 ---
 
 # GSC
@@ -130,6 +130,7 @@ Replace `<skill-path>` with the installed skill location (e.g., `.claude/skills/
 When the user triggers this skill with arguments like `/gsc 3m` or `/gsc 7d query`:
 - First argument matching a range pattern (`7d`, `28d`, `3m`, `6m`, `12m`): use as `--range`
 - Second argument matching a type (`query`, `page`, `summary`, `all`): use as `--type`
+- `--output html` or `--output telegram`: sets the output mode (default: `html`)
 - If no arguments provided, **omit `--range` and `--type` from the command** — the scripts read defaults from `.gsc-config.json` automatically. Do not pass hardcoded fallback values.
 
 ### Example Commands
@@ -418,6 +419,53 @@ Add these styles to the HTML report when comparison data is present:
 Display deltas next to current values, e.g.: `320 <span class="delta trend-up">+20 (+6.7%)</span>`
 
 For position, **lower is better** — so a negative position change is an improvement (use `trend-up`).
+
+## Output Modes
+
+### `--output html` (default)
+
+Full pipeline: fetch data, generate HTML report, open in browser, print action items in terminal. See **Workflow — Every Report** above.
+
+### `--output telegram`
+
+Progress digest mode — sends a concise summary to the user via Telegram. No HTML report is generated. No action items.
+
+**When to use:** Automated/scheduled runs where you just want to know how the site is performing compared to the last snapshot.
+
+**Steps:**
+
+1. Run the full fetch + compare pipeline (same as html mode — `gsc-history.mjs fetch` then `gsc-history.mjs trends`)
+2. Format the Telegram message (see format below)
+3. Send via the configured Telegram bot using the `send_telegram_message` tool or equivalent OpenClaw messaging skill
+4. Do not write any HTML file, do not open a browser, do not prompt for action items
+
+**Telegram message format:**
+
+```
+📊 GSC — {domain} ({range}, {date})
+
+Clicks: {clicks} {delta}
+Impressions: {impressions} {delta}
+CTR: {ctr}% {delta}
+Position: {position} {delta}
+
+🔔 Alerts:
+• "{query}" entered page 1 ({old} → {new})
+• "{query}" dropped off page 1 ({old} → {new})
+
+Top movers:
+↑ "{query}" +{n} pos
+↓ "{query}" -{n} pos
+```
+
+**Formatting rules:**
+- Use ↑ for improvements, ↓ for declines, → for no change
+- Show delta as `+N (+N%)` or `-N (-N%)` where applicable. For position, lower is better — a negative delta is an improvement (↑)
+- If no comparison is available (first snapshot), omit the delta section and note: `(no previous snapshot to compare)`
+- If no alerts, omit the 🔔 section entirely
+- Top movers: show up to 3 improved and 3 declined queries by position delta (minimum 1.0 position change)
+- Keep the message short — this is a digest, not a full report
+- All text in English regardless of site language
 
 ## Analysis Framework
 
