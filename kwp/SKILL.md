@@ -39,16 +39,23 @@ Sign up at dataforseo.com. New accounts receive a free trial credit. No credit c
 
 In the DataForSEO dashboard, find your **Login** (your email) and **Password** (API password, not your account password — check the API dashboard).
 
-### Step 3: Set Environment Variables
+### Step 3: Add Credentials to `.env`
 
-Add these two variables to your shell profile (`.zshrc`, `.bashrc`) or `.env`:
+Add these two variables to the `.env` file in your project root:
+
+```
+DATAFORSEO_LOGIN=your@email.com
+DATAFORSEO_PASSWORD=your_api_password
+```
 
 | Variable | Description |
 |----------|-------------|
 | `DATAFORSEO_LOGIN` | Your DataForSEO account email |
 | `DATAFORSEO_PASSWORD` | Your DataForSEO API password |
 
-**Security:** Credentials are provided exclusively via environment variables — never stored in files or script arguments.
+The script automatically loads `.env` from the project root (or any parent directory). All required variables — credentials and site URL — are read from `.env`. No shell profile changes needed.
+
+**Security:** Never commit `.env` to version control. Ensure `.env` is listed in `.gitignore`.
 
 ## How to Fetch Keyword Data
 
