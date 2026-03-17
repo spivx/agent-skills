@@ -155,9 +155,32 @@ Do NOT print keyword tables or stats in the terminal — those belong in the HTM
 
 ## Analysis Framework
 
-### Keyword Prioritization
+### Revenue Potential Score
 
-Score each keyword by opportunity:
+For each keyword, calculate a **Revenue Potential Score** that reflects business impact — not just traffic volume. This score is the primary sort key for both the content calendar and the keyword table.
+
+**Formula:**
+
+```
+revenueScore = round(cpc * sqrt(avgMonthlySearches) * (100 - competitionIndex) / 100, 1)
+```
+
+- `cpc` — use 0 if null
+- `sqrt(avgMonthlySearches)` — volume matters, but CPC dominates
+- `(100 - competitionIndex) / 100` — penalizes hard-to-rank keywords
+
+**Revenue Potential tiers** (assign after computing scores for the full set):
+
+| Tier | Criteria |
+|------|----------|
+| **Top** | Top 10% of scores in the result set |
+| **High** | 10–30% |
+| **Medium** | 30–60% |
+| **Low** | Bottom 40% |
+
+When `cpc` is null for all keywords (e.g., non-commercial locale), fall back to the volume × competition prioritization below.
+
+### Keyword Prioritization (fallback when CPC unavailable)
 
 | Signal | Priority |
 |--------|----------|
@@ -191,25 +214,27 @@ Group keywords that share the same **core topic** into one article cluster. One 
 
 ### Content Calendar Format
 
-Generate the calendar as a numbered list, ordered by priority (Top → High → Medium → Low). For each article:
+Generate the calendar as a numbered list, **ordered by Revenue Potential Score** (highest first). For each article:
 
 ```
-1. "How to Build a Content Marketing Strategy (+ Free Template)"
-   → Primary: "content marketing strategy" — 5,400/mo, LOW competition
-   → Also targets: "content strategy template", "how to create a content strategy"
-   → Format: How-to guide
-   → Priority: TOP — high volume, low competition
+1. "Best Divorce Lawyer in Tel Aviv — How to Choose"
+   → Primary: "divorce lawyer tel aviv" — 1,200/mo, CPC $18.50, LOW competition
+   → Also targets: "family attorney tel aviv", "divorce attorney cost israel"
+   → Format: Commercial roundup
+   → Revenue Potential: TOP (score: 142.3) — high CPC signals buyer intent
 ```
 
-In the HTML report, expand this with a full table including all secondary keywords, volumes, and a suggested publish date.
+Include the Revenue Potential score and a one-line explanation of why it ranks where it does (e.g., "high CPC signals buyer intent", "low competition, moderate CPC", "informational — lower conversion likelihood").
+
+In the HTML report, expand this with a full table including all secondary keywords, volumes, CPC, revenue score, and a suggested publish date.
 
 ## HTML Report
 
 Generate `kwp-report.html` in the project root. Structure:
 
 1. **Summary card** — total keywords found, input used (seeds/url/topic), date, language, country
-2. **Full keyword table** — keyword, monthly searches, competition, competition index, CPC (USD), priority tier
-3. **Content calendar** — each article cluster with title, primary + secondary keywords, format, priority, and suggested week number
+2. **Full keyword table** — keyword, monthly searches, competition, competition index, CPC (USD), revenue score, revenue potential tier — **sorted by revenue score descending**
+3. **Content calendar** — each article cluster with title, primary + secondary keywords, format, revenue potential tier, revenue score, and suggested week number — **sorted by revenue score descending**
 
 Use the same HTML structure as `gsc-report.html`:
 
@@ -238,6 +263,7 @@ Use the same HTML structure as `gsc-report.html`:
     .comp-low { color: #059669; }
     .comp-medium { color: #d97706; }
     .comp-high { color: #dc2626; }
+    .revenue-score { font-weight: 600; font-variant-numeric: tabular-nums; }
     .cluster { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 1rem 1.25rem; margin: 1rem 0; }
     .cluster h3 { margin: 0 0 0.5rem; font-size: 1rem; }
     .note { background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 0.75rem 1rem; margin: 1rem 0; font-size: 0.9rem; }
