@@ -48,20 +48,13 @@ function loadDotEnv() {
 }
 loadDotEnv();
 
-// --- Credentials from environment variables ---
-const client_id = process.env.GSC_CLIENT_ID;
-const client_secret = process.env.GSC_CLIENT_SECRET;
-const refresh_token = process.env.GSC_REFRESH_TOKEN;
-const developerToken = process.env.GOOGLE_ADS_DEVELOPER_TOKEN;
-const rawCustomerId = process.env.GOOGLE_ADS_CUSTOMER_ID;
+// --- Credentials ---
+const login = process.env.DATAFORSEO_LOGIN;
+const password = process.env.DATAFORSEO_PASSWORD;
 
-// Validate credentials
 const missingEnvVars = [
-  !client_id && "GSC_CLIENT_ID",
-  !client_secret && "GSC_CLIENT_SECRET",
-  !refresh_token && "GSC_REFRESH_TOKEN",
-  !developerToken && "GOOGLE_ADS_DEVELOPER_TOKEN",
-  !rawCustomerId && "GOOGLE_ADS_CUSTOMER_ID",
+  !login && "DATAFORSEO_LOGIN",
+  !password && "DATAFORSEO_PASSWORD",
 ].filter(Boolean);
 
 if (missingEnvVars.length > 0) {
@@ -75,252 +68,200 @@ if (missingEnvVars.length > 0) {
   process.exit(1);
 }
 
-// Normalize customer ID: strip dashes (123-456-7890 → 1234567890)
-const customerId = rawCustomerId.replace(/-/g, "");
+const authHeader =
+  "Basic " + Buffer.from(`${login}:${password}`).toString("base64");
 
-// --- Parse input mode ---
-// --seeds "keyword1,keyword2"
-// --url "https://example.com"
-// --topic "email marketing"
+// --- Input mode ---
 const seedsRaw = getArg("seeds");
-const urlInput = getArg("url");
 const topicInput = getArg("topic");
+
+// Auto-detect site URL from common env vars if --url not provided
+const SITE_URL_VARS = [
+  "SITE_URL",
+  "APP_URL",
+  "NEXT_PUBLIC_SITE_URL",
+  "NUXT_PUBLIC_SITE_URL",
+  "URL",
+  "VERCEL_URL",
+  "BASE_URL",
+  "WEBSITE_URL",
+  "PUBLIC_URL",
+];
+function detectSiteUrl() {
+  for (const key of SITE_URL_VARS) {
+    const val = process.env[key];
+    if (val && val.startsWith("http")) return val;
+  }
+  return null;
+}
+
+const urlInput = getArg("url") || (!seedsRaw && !topicInput ? detectSiteUrl() : null);
 
 if (!seedsRaw && !urlInput && !topicInput) {
   console.log(
     JSON.stringify({
       error: "NO_INPUT",
       message:
-        "Provide at least one of: --seeds 'kw1,kw2', --url 'https://example.com', --topic 'your topic'",
+        "Provide at least one of: --seeds 'kw1,kw2', --url 'https://example.com', --topic 'your topic'. " +
+        "Or set a site URL env var (SITE_URL, APP_URL, NEXT_PUBLIC_SITE_URL, etc.) to auto-detect from your project.",
     })
   );
   process.exit(1);
 }
 
-// --- Language and geo constants ---
-// Google Ads language resource names
-const LANGUAGE_MAP = {
-  en: "languageConstants/1000",
-  de: "languageConstants/1001",
-  fr: "languageConstants/1002",
-  es: "languageConstants/1003",
-  pt: "languageConstants/1004",
-  it: "languageConstants/1005",
-  ja: "languageConstants/1009",
-  ko: "languageConstants/1012",
-  zh: "languageConstants/1017",
-  he: "languageConstants/1027",
-  ar: "languageConstants/1019",
-  ru: "languageConstants/1049",
-  nl: "languageConstants/1010",
-  pl: "languageConstants/1030",
-};
-
-// Google Ads geo target constants (country-level)
-const GEO_MAP = {
-  US: "geoTargetConstants/2840",
-  GB: "geoTargetConstants/2826",
-  CA: "geoTargetConstants/2124",
-  AU: "geoTargetConstants/2036",
-  DE: "geoTargetConstants/2276",
-  FR: "geoTargetConstants/2250",
-  ES: "geoTargetConstants/2724",
-  IT: "geoTargetConstants/2380",
-  BR: "geoTargetConstants/2076",
-  IN: "geoTargetConstants/2356",
-  JP: "geoTargetConstants/2392",
-  IL: "geoTargetConstants/2376",
-  NL: "geoTargetConstants/2528",
-  PL: "geoTargetConstants/2616",
+// --- Location and language maps ---
+const LOCATION_MAP = {
+  US: 2840,
+  GB: 2826,
+  CA: 2124,
+  AU: 2036,
+  DE: 2276,
+  FR: 2250,
+  ES: 2724,
+  IT: 2380,
+  BR: 2076,
+  IN: 2356,
+  JP: 2392,
+  IL: 2376,
+  NL: 2528,
+  PL: 2616,
 };
 
 const langCode = getArg("lang", "en");
 const countryCode = getArg("country", "US").toUpperCase();
 const limit = parseInt(getArg("limit", "50"), 10);
+const locationCode = LOCATION_MAP[countryCode] || 2840;
 
-const languageResource = LANGUAGE_MAP[langCode.toLowerCase()] || `languageConstants/1000`;
-const geoResource = GEO_MAP[countryCode] || `geoTargetConstants/2840`;
+const BASE_URL = "https://api.dataforseo.com/v3/dataforseo_labs/google";
 
-// --- Sanitize errors (strip credentials) ---
-function sanitizeError(message) {
-  let s = message;
-  if (client_secret) s = s.replaceAll(client_secret, "[REDACTED]");
-  if (refresh_token) s = s.replaceAll(refresh_token, "[REDACTED]");
-  if (client_id) s = s.replaceAll(client_id, "[REDACTED]");
-  if (developerToken) s = s.replaceAll(developerToken, "[REDACTED]");
-  return s;
-}
-
-// --- OAuth2 token refresh (adwords scope) ---
-async function refreshAccessToken() {
-  const resp = await fetch("https://oauth2.googleapis.com/token", {
+// --- API helper ---
+async function apiPost(endpoint, body) {
+  const resp = await fetch(`${BASE_URL}/${endpoint}`, {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id,
-      client_secret,
-      refresh_token,
-      grant_type: "refresh_token",
-    }),
+    headers: { Authorization: authHeader, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
   });
-
   if (!resp.ok) {
-    const body = await resp.text();
-    throw new Error(`Token refresh failed (${resp.status}): ${body}`);
+    const text = await resp.text();
+    throw new Error(`DataForSEO API error (${resp.status}): ${text}`);
   }
-
-  const data = await resp.json();
-  if (!data.access_token) {
-    throw new Error(`No access_token in token response: ${JSON.stringify(data)}`);
-  }
-  return data.access_token;
+  return resp.json();
 }
 
-// --- Build request body ---
-function buildRequestBody() {
-  const body = {
-    language: languageResource,
-    geoTargetConstants: [geoResource],
-    includeAdultKeywords: false,
-    keywordPlanNetwork: "GOOGLE_SEARCH",
-    pageSize: Math.min(limit, 1000),
-  };
-
-  // Build seed — combine all provided inputs
-  const keywords = [];
-  if (seedsRaw) {
-    keywords.push(...seedsRaw.split(",").map((k) => k.trim()).filter(Boolean));
-  }
-  if (topicInput) {
-    keywords.push(topicInput.trim());
-  }
-
-  if (urlInput && keywords.length > 0) {
-    // Both URL and keywords provided
-    body.keywordAndUrlSeed = { url: urlInput, keywords };
-  } else if (urlInput) {
-    // URL only — check if it's a domain or a full URL
-    const isFullUrl = urlInput.includes("/") && urlInput.split("/").length > 3;
-    if (isFullUrl) {
-      body.urlSeed = { url: urlInput };
-    } else {
-      // Domain only — strip protocol if present
-      const domain = urlInput.replace(/^https?:\/\//, "").replace(/\/$/, "");
-      body.siteSeed = { site: domain };
+// --- Parse keyword items from live response ---
+function parseItems(data) {
+  const items = [];
+  for (const task of data.tasks || []) {
+    for (const r of task.result || []) {
+      items.push(...(r.items || []));
     }
-  } else if (keywords.length > 0) {
-    body.keywordSeed = { keywords };
   }
-
-  return body;
+  return items;
 }
 
-// --- Call Google Ads API ---
-async function generateKeywordIdeas(accessToken) {
-  const url = `https://googleads.googleapis.com/v17/customers/${customerId}:generateKeywordIdeas`;
+// --- Map DataForSEO Labs fields to kwp output format ---
+function mapKeyword(item) {
+  const info = item.keyword_info || {};
+  const competitionFloat = info.competition ?? null;
 
-  const requestBody = buildRequestBody();
-
-  const resp = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "developer-token": developerToken,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(requestBody),
-  });
-
-  if (!resp.ok) {
-    const errBody = await resp.text();
-    throw new Error(`Google Ads API error (${resp.status}): ${errBody}`);
+  let competitionIndex = 0;
+  if (competitionFloat != null) {
+    // Labs returns competition as 0–1 float; multiply to get 0–100 index
+    competitionIndex =
+      competitionFloat > 1
+        ? Math.round(competitionFloat) // already 0–100
+        : Math.round(competitionFloat * 100);
   }
 
-  const data = await resp.json();
-  return data.results || [];
-}
+  const competitionLevel = info.competition_level || "UNKNOWN";
 
-// --- Parse competition level ---
-function parseCompetition(value) {
-  // API returns "LOW", "MEDIUM", "HIGH", or "UNSPECIFIED"
-  if (!value || value === "UNSPECIFIED" || value === "UNKNOWN") return "UNKNOWN";
-  return value;
+  return {
+    keyword: item.keyword,
+    avgMonthlySearches: info.search_volume || 0,
+    competition: competitionLevel,
+    competitionIndex,
+    cpc: info.cpc ?? null,
+  };
 }
 
 // --- Main ---
 async function main() {
-  let accessToken;
-  try {
-    accessToken = await refreshAccessToken();
-  } catch (err) {
-    const msg = sanitizeError(err.message);
-    if (msg.includes("401") || msg.includes("403") || msg.includes("invalid_grant")) {
-      console.log(
-        JSON.stringify({
-          error: "TOKEN_REFRESH_FAILED",
-          message: `OAuth token refresh failed. Check your credentials or regenerate your refresh token with the adwords scope. Details: ${msg}`,
-        })
-      );
-    } else {
-      console.log(
-        JSON.stringify({ error: "TOKEN_REFRESH_FAILED", message: msg })
-      );
-    }
-    process.exit(1);
-  }
+  const seeds = [];
+  if (seedsRaw) seeds.push(...seedsRaw.split(",").map((k) => k.trim()).filter(Boolean));
+  if (topicInput) seeds.push(topicInput.trim());
 
-  let rawResults;
+  let data;
+  let endpoint;
+
   try {
-    rawResults = await generateKeywordIdeas(accessToken);
+    if (urlInput && seeds.length === 0) {
+      // URL-only: use keywords_for_site/live
+      endpoint = "keywords_for_site";
+      const domain = urlInput
+        .replace(/^https?:\/\//, "")
+        .replace(/\/$/, "");
+      data = await apiPost("keywords_for_site/live", [
+        {
+          target: domain,
+          language_code: langCode,
+          location_code: locationCode,
+        },
+      ]);
+    } else {
+      // Seeds / topic: use keyword_ideas/live
+      endpoint = "keyword_ideas";
+      data = await apiPost("keyword_ideas/live", [
+        {
+          keywords: seeds,
+          language_code: langCode,
+          location_code: locationCode,
+        },
+      ]);
+    }
   } catch (err) {
-    const msg = sanitizeError(err.message);
-    let errorCode = "ADS_API_ERROR";
-    if (msg.includes("403")) errorCode = "PERMISSION_DENIED";
+    const msg = err.message;
+    let errorCode = "API_ERROR";
+    if (msg.includes("401") || msg.includes("403")) errorCode = "PERMISSION_DENIED";
     if (msg.includes("400")) errorCode = "INVALID_REQUEST";
     console.log(JSON.stringify({ error: errorCode, message: msg }));
     process.exit(1);
   }
 
-  // Transform results
-  const keywords = rawResults
-    .filter((r) => r.keywordIdeaMetrics)
-    .map((r) => {
-      const m = r.keywordIdeaMetrics;
-      const avgMonthly = parseInt(m.avgMonthlySearches || "0", 10);
-      const competitionIndex = parseInt(m.competitionIndex || "0", 10);
-      const lowBidMicros = parseInt(m.lowTopOfPageBidMicros || "0", 10);
-      const highBidMicros = parseInt(m.highTopOfPageBidMicros || "0", 10);
+  // Check for DataForSEO-level errors (can arrive with HTTP 200)
+  const statusCode = data.tasks?.[0]?.status_code;
+  if (statusCode && statusCode !== 20000) {
+    const msg = data.tasks?.[0]?.status_message || "Unknown error";
+    console.log(
+      JSON.stringify({ error: "API_ERROR", statusCode, message: msg })
+    );
+    process.exit(1);
+  }
 
-      return {
-        keyword: r.text,
-        avgMonthlySearches: avgMonthly,
-        competition: parseCompetition(m.competition),
-        competitionIndex,
-        lowTopOfPageBid: lowBidMicros > 0 ? Math.round(lowBidMicros / 10000) / 100 : null,
-        highTopOfPageBid: highBidMicros > 0 ? Math.round(highBidMicros / 10000) / 100 : null,
-      };
-    })
-    // Filter out very low volume unless --all flag
+  const rawItems = parseItems(data);
+  const keywords = rawItems
+    .map(mapKeyword)
     .filter((k) => hasFlag("all") || k.avgMonthlySearches >= 100)
-    // Sort by volume descending
-    .sort((a, b) => b.avgMonthlySearches - a.avgMonthlySearches);
+    .sort((a, b) => b.avgMonthlySearches - a.avgMonthlySearches)
+    .slice(0, limit);
 
-  const output = {
-    metadata: {
-      seeds: seedsRaw ? seedsRaw.split(",").map((k) => k.trim()) : [],
-      url: urlInput || null,
-      topic: topicInput || null,
-      language: langCode,
-      country: countryCode,
-      limit,
-      totalResults: rawResults.length,
-      filteredResults: keywords.length,
-      fetchedAt: new Date().toISOString(),
-    },
-    keywords,
-  };
-
-  console.log(JSON.stringify(output, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        metadata: {
+          endpoint,
+          language: langCode,
+          country: countryCode,
+          limit,
+          totalResults: rawItems.length,
+          filteredResults: keywords.length,
+          fetchedAt: new Date().toISOString(),
+        },
+        keywords,
+      },
+      null,
+      2
+    )
+  );
 }
 
 main();
