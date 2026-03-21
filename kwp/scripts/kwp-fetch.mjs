@@ -48,6 +48,31 @@ function loadDotEnv() {
 }
 loadDotEnv();
 
+// --- Load ~/.zshrc as fallback (only sets vars not already in env) ---
+function loadZshrc() {
+  try {
+    const home = process.env.HOME || process.env.USERPROFILE;
+    if (!home) return;
+    const lines = readFileSync(resolve(home, ".zshrc"), "utf-8").split("\n");
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const match = trimmed.match(/^export\s+([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
+      if (!match) continue;
+      const key = match[1];
+      let val = match[2].trim();
+      if (
+        (val.startsWith('"') && val.endsWith('"')) ||
+        (val.startsWith("'") && val.endsWith("'"))
+      ) {
+        val = val.slice(1, -1);
+      }
+      if (!(key in process.env)) process.env[key] = val;
+    }
+  } catch { /* .zshrc not found or not readable — ignore */ }
+}
+loadZshrc();
+
 // --- Credentials ---
 const login = process.env.DATAFORSEO_LOGIN;
 const password = process.env.DATAFORSEO_PASSWORD;
